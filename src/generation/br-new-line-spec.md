@@ -1,27 +1,28 @@
 # A `<br>` starts a new line
 
-The formatter writes the content after an inline `<br>` tag on a new line, so a
-line break a reader sees in the rendered page is also a line break in the
-source. A `\`
-[hard line break](https://spec.commonmark.org/0.31.2/#hard-line-breaks) already
-works this way; `<br>` is the [raw HTML](https://spec.commonmark.org/0.31.2/#raw-html)
-spelling of the same
-[break](https://html.spec.whatwg.org/multipage/text-level-semantics.html#the-br-element).
+A rendered line break after an inline `<br>` tag should also be a source line
+break. A hard line break (`\`) already behaves this way; `<br>` is the raw HTML
+spelling of the same break.
+
+This is a rule about the formatter's output, not about a browser's rendering.
+If the text after the tag is in the same paragraph, then the source should keep
+that break visible as well.
 
 ## Problem
 
-With `textWrap` set to `always`, `never` or `sentence`, the formatter joins the
-line after a `<br>` to the one before it, as it does any line break within a
-paragraph:
+Today, some `textWrap` modes collapse the content after a `<br>` into the
+previous line instead of preserving the break in the source. For example:
 
 ```markdown
 First line<br>
 second line.
 ```
 
-is written as `First line<br> second line.`. With `always`, the joined text is
-then wrapped wherever it reaches the line width, not at the `<br>`. No mode
-breaks the line after a `<br>` written mid-line (`a<br>b`).
+can be written as `First line<br> second line.`. With `textWrap: always`, the
+joined text is then wrapped at the line width rather than at the `<br>`. A
+mid-line `<br>` such as `a<br>b` should not lose the line break either.
+
+This is a formatting bug. The rule below defines the desired behavior.
 
 ## Definitions
 
@@ -32,23 +33,23 @@ breaks the line after a `<br>` written mid-line (`a<br>b`).
   `<br class="x">`. These are not break tags: `</br>`, a `<br>` inside a code
   span, `\<br>`, `&lt;br&gt;`.
 - **What follows:** the next inline node after the break tag in the same
-  paragraph, skipping whitespace (spaces, tabs and line endings).
+  paragraph, skipping whitespace (spaces, tabs, and line endings).
 
 ## Rule
 
-In every `textWrap` mode, the formatter writes a line break between a break tag
-and what follows:
+In every `textWrap` mode, when a break tag is followed by inline content in the
+same paragraph, the formatter writes a line break between the tag and what
+follows:
 
-1. The whitespace between the tag and what follows is replaced by that one line
-   break. Whitespace before the tag is left as written.
-2. The tag is written as it was (letter case, attributes, slash).
+1. The whitespace between the tag and what follows is replaced by one line
+   break. Whitespace before the tag stays as written.
+2. The tag is written exactly as it appeared (letter case, attributes, slash).
 3. The new line starts at the paragraph's indentation (list item, block quote,
-   footnote, definition), as after a `\` hard break.
-4. Where text is wrapped (`always`, `maintainAndWrap`), the new line is filled
+   footnote, definition), just as after a hard break.
+4. If wrapping is active (`always`, `maintainAndWrap`), the new line is filled
    and wrapped as usual, but the line break after the tag is never removed.
 
-The formatter does not add this line break, and writes the separator exactly as
-it does today, when:
+The formatter does not add a line break in the source when:
 
 - **What follows is another break tag.** `<br><br>` stays together; the line
   break goes after the last tag.
@@ -59,8 +60,11 @@ it does today, when:
 - **What follows would start a block at the start of a line** (a list marker,
   `#`, `>`, a code fence, a thematic break, a tag such as `<div>` that starts an
   HTML block), or would turn the line above into a setext heading (`===`).
-  Breaking there would change the document, and a `<br>` renders the same
-  without a line break in the source.
+  Breaking there would change the document, and a `<br>` renders the same without
+  a line break in the source.
+
+These exceptions are not contradictions of the general rule; they are cases in
+which a line break would change the document's meaning or structure.
 
 ## Out of scope
 

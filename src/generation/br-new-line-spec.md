@@ -76,26 +76,38 @@ which a line break would change the document's meaning or structure.
 
 ## Examples
 
-`⏎` marks a line break. The configuration is the default (`textWrap:
-maintain`) unless noted.
+`⏎` marks a line break. The configuration is the default (`textWrap: maintain`) unless noted.
 
 | #  | Input                                                                               | Output                                         |
 | -- | ----------------------------------------------------------------------------------- | ---------------------------------------------- |
 | 1  | `a<br>b`                                                                            | `a<br>⏎b`                                      |
 | 2  | `a<br>⏎b` with `textWrap: always`                                                   | `a<br>⏎b` (today: `a<br> b`)                   |
 | 3  | `a <br> b`                                                                          | `a <br>⏎b`                                     |
-| 4  | `a<BR>b`, `a<br/>b`, `a<br />b`, `a<br class="x">b`                                 | A line break after the tag; the tag unchanged. |
-| 5  | `a<br><br>b`                                                                        | `a<br><br>⏎b`                                  |
-| 6  | `a<br>`                                                                             | Unchanged.                                     |
-| 7  | `` `a<br>b` ``                                                                      | Unchanged.                                     |
-| 8  | `a</br>b`                                                                           | Unchanged.                                     |
-| 9  | `a<br>- b`, `a<br># b`, `a<br>> b`, `a<br><div>b</div>`, `a<br>===`                 | Unchanged.                                     |
-| 10 | `# a<br>b`                                                                          | Unchanged.                                     |
-| 11 | A table cell holding `a<br>b`                                                       | Unchanged.                                     |
-| 12 | `- a<br>b`                                                                          | `- a<br>⏎  b`                                  |
-| 13 | `> a<br>b`                                                                          | `> a<br>⏎> b`                                  |
-| 14 | `[a<br>b](/u)`                                                                      | `[a<br>⏎b](/u)`                                |
-| 15 | `one two<br>three four five six seven eight` with `textWrap: always, lineWidth: 20` | `one two<br>⏎three four five six⏎seven eight`  |
+| 4  | `a<BR>b`                                                                            | `a<BR>⏎b`                                      |
+| 5  | `a<br/>b`                                                                           | `a<br/>⏎b`                                     |
+| 6  | `a<br />b`                                                                          | `a<br />⏎b`                                    |
+| 7  | `a<br class="x">b`                                                                  | `a<br class="x">⏎b`                            |
+| 8  | `a<br><br>b`                                                                        | `a<br><br>⏎b`                                  |
+| 9  | `a<br>`                                                                             | Unchanged.                                     |
+| 10 | `` `a<br>b` ``                                                                      | Unchanged.                                     |
+| 11 | `a</br>b`                                                                           | Unchanged.                                     |
+| 12 | `a<br>- b`, `a<br># b`, `a<br>> b`, `a<br><div>b</div>`, `a<br>===`                 | Unchanged.                                     |
+| 13 | `<br>b`, `- <br>b`, `> <br>b` (tag at start of block)                               | Unchanged.                                     |
+| 14 | `<br><br>b`                                                                         | `<br><br>⏎b`                                   |
+| 15 | `# a<br>b`                                                                          | Unchanged.                                     |
+| 16 | `a<br>b⏎===` (setext heading)                                                       | Unchanged.                                     |
+| 17 | A table cell holding `a<br>b`                                                       | Unchanged.                                     |
+| 18 | `Term<br>term⏎: definition` (definition-list term)                                  | Unchanged.                                     |
+| 19 | `- a<br>b`                                                                          | `- a<br>⏎  b`                                  |
+| 20 | `> a<br>b`                                                                          | `> a<br>⏎> b`                                  |
+| 21 | `[^1]: a<br>b`                                                                      | `[^1]: a<br>⏎    b`                            |
+| 22 | `[a<br>b](/u)` (inline link)                                                        | `[a<br>⏎b](/u)`                                |
+| 23 | `[a<br>b]`, `[a<br>b][]` (shortcut and collapsed ref links)                         | Unchanged.                                     |
+| 24 | `a<br>\⏎b` (hard break after tag)                                                   | Unchanged.                                     |
+| 25 | `a<br>b` with `textWrap: never`                                                     | `a<br>⏎b`                                      |
+| 26 | `a. <br>b` with `textWrap: sentence`                                                | `a. <br>⏎b`                                    |
+| 27 | `one two<br>three four five six seven eight` with `textWrap: always, lineWidth: 20` | `one two<br>⏎three four five six⏎seven eight`  |
+| 28 | `one two<br>three four five six seven eight` with `textWrap: maintainAndWrap, lineWidth: 20` | `one two<br>⏎three four five six⏎seven eight` |
 
 Formatting any output again leaves it unchanged.
 
@@ -103,20 +115,27 @@ Formatting any output again leaves it unchanged.
 
 - `src/generation/generate.rs`, `gen_nodes_within_breaks`: when `last_node` is a
   break tag, choose the separator before `node`. Keep today's behaviour if
-  `node` is a break tag or a hard break, or if `starts_block_at_line_start`,
+  `node` is a break tag, a hard break, the tag is at the start of a block
+  (starts a CommonMark type-7 HTML block), the text is inside a reference link
+  label (`is_preserving_decorations()`), or if `starts_block_at_line_start`,
   `starts_html_block`, or `text_can_be_wrapped_away` with
   `starts_with_list_word` holds for it. Otherwise push a `Signal::NewLine`
   inside `if_true_or(…, condition_resolvers::is_forcing_no_newlines(), …)`, as
-  `gen_hard_break` does, so that a heading or table cell gets the separator as
-  written.
-- Add `is_break_tag(&Html) -> bool` beside the tag helpers in `src/html/tags.rs`:
-  `!is_block`, then `<`, then `br` in any ASCII case, then whitespace, `/` or
-  `>`.
-- Tests: add `tests/specs/html/Html_BrNewLine.txt` and
-  `tests/specs/html/Html_BrNewLine_TextWrap_Always.txt`
-  (`~~ lineWidth: 20, textWrap: always ~~`), one case per example. Update the
-  expected output of `tests/specs/Issues/Issue0076.txt` (text after a run of
-  `<br>` tags moves to its own line). In
+  `gen_hard_break` does, so that an ATX heading, setext heading, or table cell
+  gets the separator as written.
+- Add `is_break_tag(node: &Node) -> bool` in `src/generation/generate.rs` beside
+  `starts_html_block` (or on `Node` in `src/generation/common/mod.rs`): check that
+  the node is an inline HTML node with `node.to_html().is_block == false` (matching
+  `Html.is_block` in `src/parser/ast.rs`), followed by `<` and `br` (ASCII
+  case-insensitive), then whitespace, `/` or `>`.
+- Tests: add test files covering every wrap mode:
+  - `tests/specs/html/Html_BrNewLine.txt` (`textWrap: maintain`)
+  - `tests/specs/html/Html_BrNewLine_TextWrap_Always.txt` (`~~ lineWidth: 20, textWrap: always ~~`)
+  - `tests/specs/html/Html_BrNewLine_TextWrap_Never.txt` (`~~ textWrap: never ~~`)
+  - `tests/specs/html/Html_BrNewLine_TextWrap_Sentence.txt` (`~~ textWrap: sentence ~~`)
+  - `tests/specs/html/Html_BrNewLine_TextWrap_MaintainAndWrap.txt` (`~~ lineWidth: 20, textWrap: maintainAndWrap ~~`)
+  one case per example. Update the expected output of `tests/specs/Issues/Issue0076.txt`
+  (text after a run of `<br>` tags moves to its own line). In
   `tests/specs/General/HardBreaks_All.txt`, the case
   `Line<br>https://example.com/a` needs a tag other than `<br>` to keep testing
   a URL written against a tag.

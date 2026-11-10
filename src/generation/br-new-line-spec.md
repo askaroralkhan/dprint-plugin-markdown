@@ -97,11 +97,15 @@ separator when:
   `www.` only at the start of a line or after whitespace, `*`, `_`, `~` or `(`,
   so a break would turn the text into a link. `http://` and `https://` are
   linked after a `>` already, so they aren't affected.
-- **The next source line is shaped like a table delimiter row** (`| - |`,
-  `- | -`). The new line would sit directly above it and could be read as a
-  table's header row (`a | b<br>c | d⏎- | -`).
-- **The tag is inside an inline `<pre>` or `<textarea>`** opened earlier in the
-  paragraph (`x <pre>a<br>b</pre>`), where a source line break is shown.
+- **The paragraph is followed directly by a block whose first line is shaped
+  like a table delimiter row** (`- | -`), with no blank line written between
+  them, as in a tight list (`- a | b<br>c | d⏎  - | -`). The new line would sit
+  just above that row and could become a table's header. Between top-level
+  blocks the formatter always writes a blank line, so the rule applies there.
+- **The tag is inside an inline `<pre>`, `<listing>`, `<xmp>`, `<plaintext>` or
+  `<textarea>`** (in any letter case) opened earlier in the paragraph or setext
+  heading, at any nesting level (`x <pre>a<br>b</pre>`,
+  `x <pre>_a<br>b_</pre>`), where a source line break is shown.
 
 ## Out of scope
 
@@ -109,6 +113,9 @@ separator when:
   handle those.
 - Converting between `<br>` and `\` or two-space hard breaks. `hardBreakKind`
   still applies only to the latter.
+- Known limitation: bracketed text whose label differs from a link definition
+  only by the whitespace after a `<br>` (`[a<br>b]` with `[a<br> b]: /u`)
+  becomes a link once the break is written. This is rare enough to leave.
 
 ## Examples
 
@@ -159,9 +166,10 @@ footnote example includes the definition it needs.
 | 37 | `a<br>* *b*⏎===` with `heading.kind: setext`                                                                              | Unchanged.                                                                                |
 | 38 | `a<br>*.b**`                                                                                                              | Unchanged.                                                                                |
 | 39 | `a<br>**b**`, `a<br>[b](/u)`                                                                                              | Unchanged.                                                                                |
-| 40 | `a \| b<br>c \| d⏎- \| -`                                                                                                 | Unchanged.                                                                                |
-| 41 | `x <pre>a<br>b</pre>`                                                                                                     | Unchanged.                                                                                |
+| 40 | `a \| b<br>c \| d⏎- \| -`                                                                                                 | `a \| b<br>⏎c \| d⏎⏎- \| -`                                                               |
+| 41 | `x <pre>a<br>b</pre>`, `x <PRE>_a<br>b_</PRE>`                                                                            | Unchanged.                                                                                |
 | 42 | `# a<br>b` with `heading.kind: setext`                                                                                    | `a<br>⏎b⏎=====`                                                                           |
+| 43 | `- a \| b<br>c \| d⏎  - \| -`                                                                                             | Unchanged.                                                                                |
 
 Formatting any output again leaves it unchanged.
 
@@ -182,10 +190,13 @@ Formatting any output again leaves it unchanged.
     marked by a new context flag that `gen_link_text` sets when `is_the_name`
     is true (`is_preserving_decorations()` can't be reused, since the emphasis
     fallback in `gen_checked_decorations` sets it for a whole paragraph);
-  - the source line after the tag's line isn't shaped like a delimiter row
-    (`is_table_delimiter_shape` in `src/parser/block.rs`);
-  - no inline `<pre>` or `<textarea>` opened before the tag in the paragraph is
-    still open.
+  - the paragraph isn't followed, with no blank line written between, by a
+    block whose first line (after its container prefix) is shaped like a
+    delimiter row (`is_table_delimiter_shape` in `src/parser/block.rs`, made
+    `pub(crate)`);
+  - no inline `<pre>`, `<listing>`, `<xmp>`, `<plaintext>` or `<textarea>`
+    opened before the tag in the paragraph or setext heading, at any nesting
+    level, is still open.
 
   Push the line break inside
   `if_true_or(…, condition_resolvers::is_forcing_no_newlines(), …)`, as
@@ -193,9 +204,10 @@ Formatting any output again leaves it unchanged.
   no-newlines branch, so that an ATX heading, table cell or definition-list
   term is written as today.
 - `gen_heading`: only when the option is on, record a setext heading's line
-  starts (its first child and any child after a hard break) so that
-  `is_line_start` works there, with no block-start escapes. With the option
-  off, setext headings are generated exactly as today.
+  starts (its first child and any child after a hard break) in a new context
+  field that only this check reads, alongside `is_line_start`. Recording them
+  through `with_paragraph_escapes` would also change `gen_hard_break`,
+  `gen_text` and `text_from` in setext headings without a `<br>`.
 - Add `is_break_tag(node: &Node) -> bool` in `src/generation/generate.rs` beside
   `starts_html_block`: `node` is a `Node::Html` whose `is_block` field
   (`src/parser/ast.rs`) is `false` and whose text is `<`, then `br` in any ASCII

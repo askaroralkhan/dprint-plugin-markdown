@@ -1,8 +1,10 @@
 # A `<br>` starts a new line
 
 A rendered line break after an inline `<br>` tag should also be a source line
-break. A hard line break (`\`) already behaves this way; `<br>` is the raw HTML
-spelling of the same break.
+break. A [hard line break](https://spec.commonmark.org/0.31.2/#hard-line-breaks)
+(`\`) already behaves this way; `<br>` is the
+[raw HTML](https://spec.commonmark.org/0.31.2/#raw-html) spelling of the same
+[break](https://html.spec.whatwg.org/multipage/text-level-semantics.html#the-br-element).
 
 This is a rule about the formatter's output, not about a browser's rendering.
 If the text after the tag is in the same paragraph, then the source should keep
@@ -10,19 +12,19 @@ that break visible as well.
 
 ## Problem
 
-Today, some `textWrap` modes collapse the content after a `<br>` into the
-previous line instead of preserving the break in the source. For example:
+With `textWrap` set to `always`, `never` or `sentence`, the formatter joins the
+line after a `<br>` to the one before it, as it does any line break within a
+paragraph:
 
 ```markdown
 First line<br>
 second line.
 ```
 
-can be written as `First line<br> second line.`. With `textWrap: always`, the
-joined text is then wrapped at the line width rather than at the `<br>`. A
-mid-line `<br>` such as `a<br>b` should not lose the line break either.
-
-This is a formatting bug. The rule below defines the desired behavior.
+is written as `First line<br> second line.`. With `textWrap: always`, the
+joined text is then wrapped at the line width rather than at the `<br>`. No mode
+breaks the line after a `<br>` written mid-line (`a<br>b`). The rule below adds
+that behaviour as an option.
 
 ## Definitions
 
@@ -32,8 +34,11 @@ This is a formatting bug. The rule below defines the desired behavior.
   without a `/` before the `>`: `<br>`, `<BR>`, `<br/>`, `<br />`,
   `<br class="x">`. These are not break tags: `</br>`, a `<br>` inside a code
   span, `\<br>`, `&lt;br&gt;`.
-- **What follows:** the next inline node after the break tag in the same
-  paragraph, skipping whitespace (spaces, tabs, and line endings).
+- **What follows:** the next node after the break tag with the same parent
+  (the paragraph, or the emphasis, link or other inline element holding the
+  tag), skipping whitespace (spaces, tabs, and line endings). A tag that is the
+  last thing inside an inline element, as in `*a<br>*b`, has nothing following
+  it.
 
 ## Rule
 
@@ -48,7 +53,7 @@ followed by inline content in the same paragraph, the formatter writes a line
 break between the tag and what follows:
 
 1. The whitespace between the tag and what follows is replaced by one line
-   break. Whitespace before the tag stays as written.
+   break. Whitespace before the tag is handled as today.
 2. The tag is written exactly as it appeared (letter case, attributes, slash).
 3. The new line starts at the paragraph's indentation (list item, block quote,
    footnote, definition), just as after a hard break.
@@ -124,6 +129,7 @@ the default configuration (`textWrap: maintain`) unless noted.
 | 27 | `one two<br>three four five six seven eight` with `textWrap: always, lineWidth: 20`          | `one two<br>⏎three four five six⏎seven eight`                                       |
 | 28 | `one two<br>three four five six seven eight` with `textWrap: maintainAndWrap, lineWidth: 20` | `one two<br>⏎three four five six⏎seven eight`                                       |
 | 29 | `a<br>b` with `newLineAfterBr: false` (the default)                                          | Unchanged.                                                                          |
+| 30 | `*a<br>*b` (tag last inside emphasis)                                                        | Unchanged.                                                                          |
 
 Formatting any output again leaves it unchanged.
 

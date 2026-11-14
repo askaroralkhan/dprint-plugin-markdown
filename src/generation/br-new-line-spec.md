@@ -93,15 +93,14 @@ separator when:
   `www.` only at the start of a line or after whitespace, `*`, `_`, `~` or `(`,
   so a break would turn the text into a link. `http://` and `https://` are
   linked after a `>` already, so they aren't affected.
-- **The paragraph is followed directly by a block whose first line is shaped
-  like a table delimiter row** (`- | -`), with no blank line written between
-  them, as in a tight list (`- a | b<br>c | d⏎  - | -`). The new line would sit
-  just above that row and could become a table's header. Between top-level
-  blocks the formatter always writes a blank line, so the rule applies there.
-- **The tag is inside an inline `<pre>`, `<listing>`, `<xmp>`, `<plaintext>` or
-  `<textarea>`** (in any letter case) opened earlier in the paragraph or setext
-  heading, at any nesting level (`x <pre>a<br>b</pre>`,
-  `x <pre>_a<br>b_</pre>`), where a source line break is shown.
+- **The block after the paragraph begins with a line shaped like a table
+  delimiter row** (`- | -`), including a list item's first nested list
+  (`- a | b<br>c | d⏎  - | -`). A new line just above that row could become a
+  table's header. Deciding this by the next block, rather than by the next
+  source line, gives the same output when the result is formatted again.
+- **The paragraph or setext heading holds an inline `<pre>`, `<listing>`,
+  `<xmp>`, `<plaintext>` or `<textarea>` tag** anywhere, in any letter case
+  (`x <pre>a<br>b</pre>`), since a source line break inside one is shown.
 
 ## Out of scope
 
@@ -160,7 +159,7 @@ footnote example includes the definition it needs.
 | 37 | `a<br>* *b*⏎===` with `heading.kind: setext`                                                                              | Unchanged.                                                                                |
 | 38 | `a<br>*.b**`                                                                                                              | Unchanged.                                                                                |
 | 39 | `a<br>**b**`, `a<br>[b](/u)`                                                                                              | Unchanged.                                                                                |
-| 40 | `a \| b<br>c \| d⏎- \| -`                                                                                                 | `a \| b<br>⏎c \| d⏎⏎- \| -`                                                               |
+| 40 | `a \| b<br>c \| d⏎- \| -`                                                                                                 | Unchanged.                                                                                |
 | 41 | `x <pre>a<br>b</pre>`, `x <PRE>_a<br>b_</PRE>`                                                                            | Unchanged.                                                                                |
 | 42 | `# a<br>b` with `heading.kind: setext`                                                                                    | `a<br>⏎b⏎=====`                                                                           |
 | 43 | `- a \| b<br>c \| d⏎  - \| -`                                                                                             | Unchanged.                                                                                |
@@ -174,38 +173,37 @@ Formatting any output again leaves it unchanged.
   `resolve_config.rs`, add a method to `builder.rs` and call it in its
   `check_all_values_set` test (raising the option count by one), and document
   the option in `deployment/schema.json`.
-- `src/generation/generate.rs`, `gen_nodes_within_breaks`: when the option is on
-  and `last_node` is a break tag, push a `Signal::NewLine` before `node` only if
-  all of these hold, and otherwise keep today's separator:
-  - `node` is a `Text` node whose first character is alphabetic and which
-    doesn't start with `www.`;
-  - the tag isn't a line start (`context.is_line_start(last_node.span().start)`);
-  - the tag isn't in the text a shortcut or collapsed link is matched by,
-    marked by a new context flag that `gen_link_text` sets when `is_the_name`
-    is true (`is_preserving_decorations()` can't be reused, since the emphasis
-    fallback in `gen_checked_decorations` sets it for a whole paragraph);
-  - the paragraph isn't followed, with no blank line written between, by a
-    block whose first line (after its container prefix) is shaped like a
-    delimiter row (`is_table_delimiter_shape` in `src/parser/block.rs`, made
-    `pub(crate)`);
-  - no inline `<pre>`, `<listing>`, `<xmp>`, `<plaintext>` or `<textarea>`
-    opened before the tag in the paragraph or setext heading, at any nesting
-    level, is still open.
-
-  Push the line break inside
-  `if_true_or(…, condition_resolvers::is_forcing_no_newlines(), …)`, as
-  `gen_hard_break` does, with today's separator (not a fixed space) in the
-  no-newlines branch, so that an ATX heading, table cell or definition-list
-  term is written as today.
-- `gen_heading`: only when the option is on, record a setext heading's line
-  starts (its first child and any child after a hard break) in a new context
-  field that only this check reads, alongside `is_line_start`. Recording them
-  through `with_paragraph_escapes` would also change `gen_hard_break`,
-  `gen_text` and `text_from` in setext headings without a `<br>`.
-- Add `is_break_tag(node: &Node) -> bool` in `src/generation/generate.rs` beside
-  `starts_html_block`: `node` is a `Node::Html` whose `is_block` field
-  (`src/parser/ast.rs`) is `false` and whose text is `<`, then `br` in any ASCII
-  case, then whitespace, `/` or `>`.
+- `src/generation/generate.rs`:
+  - `is_break_tag(node)`: `node` is a `Node::Html` whose `is_block` field is
+    `false` and whose text is `<`, then `br` in any ASCII case, then
+    whitespace, `/` or `>`.
+  - `breaks_line_after_tag(last_node, node, context)`: the option is on,
+    `last_node` is a break tag, `node` is a `Text` node beginning with an
+    alphabetic character and not with `www.`, the tag isn't a line start of its
+    paragraph or setext heading, and the context isn't in link-label text or a
+    block whose breaks are off.
+  - `gen_nodes_within_breaks`: build today's separator before `node` as before,
+    and where `breaks_line_after_tag` holds, push
+    `if_true_or(…, condition_resolvers::is_forcing_no_newlines(), separator, NewLine)`,
+    as `gen_hard_break` does, so that an ATX heading, table cell or
+    definition-list term is written as today.
+  - Before generating a paragraph or heading, turn its breaks off when it holds
+    a `<pre>`-like tag (`holds_preformatted_tag`, which reads the nested nodes
+    too) or when the next node's first line passes
+    `is_table_delimiter_shape` (`src/parser/block.rs`, made `pub`). `gen_item`
+    does the same for an item's content when its first nested list begins
+    that way, since an item keeps those in `sub_lists`.
+  - `gen_heading`: only when the option is on, record a setext heading's line
+    starts (its first child and any child after a hard break) for the
+    line-start check. `gen_link_text` marks link-label text when `is_the_name`
+    is true; `is_preserving_decorations()` can't be reused, since the emphasis
+    fallback in `gen_checked_decorations` sets it for a whole paragraph.
+- `src/generation/gen_types.rs`: the context gets the link-label flag, the
+  setext line starts (in their own field, since `gen_hard_break`, `gen_text`
+  and `text_from` read `is_line_start`) and the breaks-off flag.
+- A trial implementation along these lines is about 130 lines in
+  `src/generation`, and gives every example below its expected output in each
+  `textWrap` mode.
 - Tests: add these spec files, all with `lineBreakAfterBr: true` except the
   last:
   - `tests/specs/html/Html_BrNewLine.txt` (`textWrap: maintain`)

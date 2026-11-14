@@ -1,7 +1,8 @@
 # A `<br>` starts a new line
 
 A rendered line break after an inline `<br>` tag should also be a source line
-break, wherever adding one can't change the document. A
+break, wherever adding one can't change how a CommonMark or GFM renderer shows
+the document. A
 [hard line break](https://spec.commonmark.org/0.31.2/#hard-line-breaks) (`\`
 or two spaces at the end of a line) already behaves this way; `<br>` is the
 [raw HTML](https://spec.commonmark.org/0.31.2/#raw-html) spelling of the same
@@ -60,10 +61,11 @@ line break between the tag and what follows:
    and wrapped as usual, but the line break after the tag is never removed.
 5. The rule also applies in the text of an inline or full reference link
    (`[a<br>b](/u)`, `[a<br>b][r]`), which `always`, `never` and `sentence`
-   otherwise keep on one line, as a `\` hard break there already is.
+   otherwise keep on one line, just as a `\` hard break there already does.
 
 The formatter writes the line break only when what follows is text that
-begins with a letter (in any script). Nothing that starts a block at the start
+begins with an alphabetic character (Unicode `Alphabetic`, in any script).
+Nothing that starts a block at the start
 of a line begins with a letter: list markers, `#`, `>`, code fences, thematic
 breaks, footnote definitions (`[^1]:`), HTML tags and comments, and setext
 underlines all begin with something else. Neither do another break tag (so
@@ -78,14 +80,15 @@ separator when:
   term.** These are written on one line. A heading written as setext can span
   lines, so the rule applies there, including to `# a<br>b` with
   `heading.kind: setext`.
-- **The tag begins a line of its paragraph or setext heading:** it is a direct
-  child of the block and either its first node or the first node after a hard
-  break. On the first line, a line holding only the tag would start an
-  [HTML block](https://spec.commonmark.org/0.31.2/#html-blocks) (type 7), which
-  would turn what follows into raw HTML. After a hard break it couldn't, since a
-  type 7 block can't interrupt a paragraph, but it is left alone too to keep
-  the check simple. A task-list box isn't a node, so `- [ ] <br>b` is left
-  alone; `_<br>b_ c` isn't, since its line begins with `_`.
+- **The tag begins a line:** it is the first node of its paragraph or setext
+  heading, the first node after a hard break, or the first thing on its line
+  in the file after any `>` markers and indentation (as after a callout's
+  `[!NOTE]` line). A line holding only the tag would start an
+  [HTML block](https://spec.commonmark.org/0.31.2/#html-blocks) (type 7) where
+  a block begins, which would turn what follows into raw HTML. Where a block
+  can't begin, a break would be harmless, but it is left alone too to keep the
+  check simple. A task-list box isn't a node, so `- [ ] <br>b` is left alone;
+  `_<br>b_ c` isn't, since its line begins with `_`.
 - **The tag is in the text of a shortcut or collapsed reference link**
   (`[a<br>b]`, `[a<br>b][]`). That text is also the label the link is matched
   by, and a line break would change the label.
@@ -99,8 +102,9 @@ separator when:
   table's header. Deciding this by the next block, rather than by the next
   source line, gives the same output when the result is formatted again.
 - **The paragraph or setext heading holds an inline `<pre>`, `<listing>`,
-  `<xmp>`, `<plaintext>` or `<textarea>` tag** anywhere, in any letter case
-  (`x <pre>a<br>b</pre>`), since a source line break inside one is shown.
+  `<xmp>`, `<plaintext>`, `<textarea>`, `<script>` or `<style>` tag** anywhere,
+  in any letter case (`x <pre>a<br>b</pre>`), since a source line break inside
+  one is shown, or breaks the script or style.
 
 ## Out of scope
 
@@ -108,9 +112,13 @@ separator when:
   handle those.
 - Converting between `<br>` and `\` or two-space hard breaks. `hardBreakKind`
   still applies only to the latter.
-- Known limitation: bracketed text whose label differs from a link definition
-  only by the whitespace after a `<br>` (`[a<br>b]` with `[a<br> b]: /u`)
-  becomes a link once the break is written. This is rare enough to leave.
+- Known limitations, rare enough to leave:
+  - bracketed text whose label differs from a link definition only by the
+    whitespace after a `<br>` (`[a<br>b]` with `[a<br> b]: /u`) becomes a link
+    once the break is written;
+  - CSS can show the break or hide the tag (`white-space: pre`, a `<br>` hidden
+    on small screens), and a `<pre>` opened in an earlier paragraph is still
+    open in a later one; the formatter reads neither.
 
 ## Examples
 
@@ -118,51 +126,55 @@ separator when:
 the default configuration (`textWrap: maintain`) unless noted. An example that
 names no mode has the same output in every `textWrap` mode, except that
 "Unchanged" means the output today's formatter gives in that mode. A link or
-footnote example includes the definition it needs.
+footnote example includes the definition it needs. Examples 10 and 32 were
+removed during review; the other numbers are kept so earlier reviews still
+match.
 
-| #  | Input                                                                                                                     | Output                                                                                    |
-| -- | ------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| 1  | `a<br>b`                                                                                                                  | `a<br>⏎b`                                                                                 |
-| 2  | `a<br>⏎b` with `textWrap: always`                                                                                         | `a<br>⏎b` (today: `a<br> b`)                                                              |
-| 3  | `a <br> b`                                                                                                                | `a <br>⏎b`                                                                                |
-| 4  | `a<BR>b`                                                                                                                  | `a<BR>⏎b`                                                                                 |
-| 5  | `a<br/>b`                                                                                                                 | `a<br/>⏎b`                                                                                |
-| 6  | `a<br />b`                                                                                                                | `a<br />⏎b`                                                                               |
-| 7  | `a<br class="x">b`                                                                                                        | `a<br class="x">⏎b`                                                                       |
-| 8  | `a<br><br>b`                                                                                                              | `a<br><br>⏎b`                                                                             |
-| 9  | `a<br>`                                                                                                                   | Unchanged.                                                                                |
-| 11 | `a</br>b`                                                                                                                 | Unchanged.                                                                                |
-| 12 | `a<br>- b`, `a<br># b`, `a<br>> b`, `a<br><div>b</div>`, `a<br>===`                                                       | Unchanged.                                                                                |
-| 13 | `<br>b`, `- <br>b`, `> <br>b`, `- [ ] <br>b`, `a\⏎<br>b`, and `<br>b⏎===` with `heading.kind: setext` (tag begins a line) | Unchanged.                                                                                |
-| 14 | `<br><br>b`                                                                                                               | `<br><br>⏎b`                                                                              |
-| 15 | `# a<br>b`                                                                                                                | Unchanged.                                                                                |
-| 16 | `a<br>b⏎===` (setext heading)                                                                                             | `a<br>⏎b⏎=====` with `heading.kind: setext`; `# a<br>b` with the default `atx`, as today. |
-| 17 | A table cell holding `a<br>b`                                                                                             | Unchanged.                                                                                |
-| 18 | `Term<br>term⏎: definition` (definition-list term)                                                                        | Unchanged.                                                                                |
-| 19 | `- a<br>b`                                                                                                                | `- a<br>⏎  b`                                                                             |
-| 20 | `> a<br>b`                                                                                                                | `> a<br>⏎> b`                                                                             |
-| 21 | `[^1]: a<br>b`                                                                                                            | `[^1]: a<br>⏎    b`                                                                       |
-| 22 | `[a<br>b](/u)`; `[a<br>b][r]⏎⏎[r]: /u` (inline and full reference link)                                                   | `[a<br>⏎b](/u)`; `[a<br>⏎b][r]⏎⏎[r]: /u`                                                  |
-| 23 | `[a<br>b]` and `[a<br>b][]`, each with `⏎⏎[a<br>b]: /u` (shortcut and collapsed reference links)                          | Unchanged.                                                                                |
-| 24 | `a<br>\⏎b` (hard break after tag)                                                                                         | Unchanged.                                                                                |
-| 25 | `a<br>b` with `textWrap: never`                                                                                           | `a<br>⏎b`                                                                                 |
-| 26 | `a. <br>b` with `textWrap: sentence`                                                                                      | `a. <br>⏎b`                                                                               |
-| 27 | `one two<br>three four five six seven eight` with `textWrap: always, lineWidth: 20`                                       | `one two<br>⏎three four five six⏎seven eight`                                             |
-| 28 | `one two<br>three four five six seven eight` with `textWrap: maintainAndWrap, lineWidth: 20`                              | `one two<br>⏎three four five six⏎seven eight`                                             |
-| 29 | `a<br>b` with `lineBreakAfterBr: false` (the default)                                                                     | Unchanged.                                                                                |
-| 30 | `[a<br>](/u)b` (tag last inside link text)                                                                                | Unchanged.                                                                                |
-| 31 | `_<br>b_ c` (tag first inside emphasis)                                                                                   | `_<br>⏎b_ c`                                                                              |
-| 33 | `a<br>www.example.com`                                                                                                    | Unchanged.                                                                                |
-| 34 | `a<br>https://example.com`                                                                                                | `a<br>⏎https://example.com`                                                               |
-| 35 | `a<br>[^1]: x⏎⏎[^1]: y` (footnote reference followed by `:`)                                                              | Unchanged.                                                                                |
-| 36 | `a<br>2. b`, and `a<br>1.⏎b` with `textWrap: never`                                                                       | Unchanged.                                                                                |
-| 37 | `a<br>* *b*⏎===` with `heading.kind: setext`                                                                              | Unchanged.                                                                                |
-| 38 | `a<br>*.b**`                                                                                                              | Unchanged.                                                                                |
-| 39 | `a<br>**b**`, `a<br>[b](/u)`                                                                                              | Unchanged.                                                                                |
-| 40 | `a \| b<br>c \| d⏎- \| -`                                                                                                 | Unchanged.                                                                                |
-| 41 | `x <pre>a<br>b</pre>`, `x <PRE>_a<br>b_</PRE>`                                                                            | Unchanged.                                                                                |
-| 42 | `# a<br>b` with `heading.kind: setext`                                                                                    | `a<br>⏎b⏎=====`                                                                           |
-| 43 | `- a \| b<br>c \| d⏎  - \| -`                                                                                             | Unchanged.                                                                                |
+| #  | Input                                                                                                                                | Output                                                                                    |
+| -- | ------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------- |
+| 1  | `a<br>b`                                                                                                                             | `a<br>⏎b`                                                                                 |
+| 2  | `a<br>⏎b` with `textWrap: always`                                                                                                    | `a<br>⏎b` (today: `a<br> b`)                                                              |
+| 3  | `a <br> b`                                                                                                                           | `a <br>⏎b`                                                                                |
+| 4  | `a<BR>b`                                                                                                                             | `a<BR>⏎b`                                                                                 |
+| 5  | `a<br/>b`                                                                                                                            | `a<br/>⏎b`                                                                                |
+| 6  | `a<br />b`                                                                                                                           | `a<br />⏎b`                                                                               |
+| 7  | `a<br class="x">b`                                                                                                                   | `a<br class="x">⏎b`                                                                       |
+| 8  | `a<br><br>b`                                                                                                                         | `a<br><br>⏎b`                                                                             |
+| 9  | `a<br>`                                                                                                                              | Unchanged.                                                                                |
+| 11 | `a</br>b`                                                                                                                            | Unchanged.                                                                                |
+| 12 | `a<br>- b`, `a<br># b`, `a<br>> b`, `a<br><div>b</div>`, `a<br>===`                                                                  | Unchanged.                                                                                |
+| 13 | `<br>b`, `- <br>b`, `> <br>b`, `- [ ] <br>b`, `a\⏎<br>b`, `a⏎<br>b`, and `<br>b⏎===` with `heading.kind: setext` (tag begins a line) | Unchanged.                                                                                |
+| 14 | `<br><br>b`                                                                                                                          | `<br><br>⏎b`                                                                              |
+| 15 | `# a<br>b`                                                                                                                           | Unchanged.                                                                                |
+| 16 | `a<br>b⏎===` (setext heading)                                                                                                        | `a<br>⏎b⏎=====` with `heading.kind: setext`; `# a<br>b` with the default `atx`, as today. |
+| 17 | A table cell holding `a<br>b`                                                                                                        | Unchanged.                                                                                |
+| 18 | `Term<br>term⏎: definition` (definition-list term)                                                                                   | Unchanged.                                                                                |
+| 19 | `- a<br>b`                                                                                                                           | `- a<br>⏎  b`                                                                             |
+| 20 | `> a<br>b`                                                                                                                           | `> a<br>⏎> b`                                                                             |
+| 21 | `[^1]: a<br>b`                                                                                                                       | `[^1]: a<br>⏎    b`                                                                       |
+| 22 | `[a<br>b](/u)`; `[a<br>b][r]⏎⏎[r]: /u` (inline and full reference link)                                                              | `[a<br>⏎b](/u)`; `[a<br>⏎b][r]⏎⏎[r]: /u`                                                  |
+| 23 | `[a<br>b]` and `[a<br>b][]`, each with `⏎⏎[a<br>b]: /u` (shortcut and collapsed reference links)                                     | Unchanged.                                                                                |
+| 24 | `a<br>\⏎b` (hard break after tag)                                                                                                    | Unchanged.                                                                                |
+| 25 | `a<br>b` with `textWrap: never`                                                                                                      | `a<br>⏎b`                                                                                 |
+| 26 | `a. <br>b` with `textWrap: sentence`                                                                                                 | `a. <br>⏎b`                                                                               |
+| 27 | `one two<br>three four five six seven eight` with `textWrap: always, lineWidth: 20`                                                  | `one two<br>⏎three four five six⏎seven eight`                                             |
+| 28 | `one two<br>three four five six seven eight` with `textWrap: maintainAndWrap, lineWidth: 20`                                         | `one two<br>⏎three four five six⏎seven eight`                                             |
+| 29 | `a<br>b` with `lineBreakAfterBr: false` (the default)                                                                                | Unchanged.                                                                                |
+| 30 | `[a<br>](/u)b` (tag last inside link text)                                                                                           | Unchanged.                                                                                |
+| 31 | `_<br>b_ c` (tag first inside emphasis)                                                                                              | `_<br>⏎b_ c`                                                                              |
+| 33 | `a<br>www.example.com`                                                                                                               | Unchanged.                                                                                |
+| 34 | `a<br>https://example.com`                                                                                                           | `a<br>⏎https://example.com`                                                               |
+| 35 | `a<br>[^1]: x⏎⏎[^1]: y` (footnote reference followed by `:`)                                                                         | Unchanged.                                                                                |
+| 36 | `a<br>2. b`, and `a<br>1.⏎b` with `textWrap: never`                                                                                  | Unchanged.                                                                                |
+| 37 | `a<br>* *b*⏎===` with `heading.kind: setext`                                                                                         | Unchanged.                                                                                |
+| 38 | `a<br>*.b**`                                                                                                                         | Unchanged.                                                                                |
+| 39 | `a<br>**b**`, `a<br>[b](/u)`                                                                                                         | Unchanged.                                                                                |
+| 40 | `a \| b<br>c \| d⏎- \| -`                                                                                                            | Unchanged.                                                                                |
+| 41 | `x <pre>a<br>b</pre>`, `x <PRE>_a<br>b_</PRE>`                                                                                       | Unchanged.                                                                                |
+| 42 | `# a<br>b` with `heading.kind: setext`                                                                                               | `a<br>⏎b⏎=====`                                                                           |
+| 43 | `- a \| b<br>c \| d⏎  - \| -`                                                                                                        | Unchanged.                                                                                |
+| 44 | `> [!NOTE]⏎> <br>b` (tag first on its line after a callout marker)                                                                   | Unchanged.                                                                                |
+| 45 | `x <script>s = "a<br>b"</script>`                                                                                                    | Unchanged.                                                                                |
 
 Formatting any output again leaves it unchanged.
 
@@ -179,9 +191,10 @@ Formatting any output again leaves it unchanged.
     whitespace, `/` or `>`.
   - `breaks_line_after_tag(last_node, node, context)`: the option is on,
     `last_node` is a break tag, `node` is a `Text` node beginning with an
-    alphabetic character and not with `www.`, the tag isn't a line start of its
-    paragraph or setext heading, and the context isn't in link-label text or a
-    block whose breaks are off.
+    alphabetic character and not with `www.`, the tag doesn't begin a line (a
+    line start of its paragraph or setext heading, or only whitespace and `>`
+    between it and the start of its line in the file), and the context isn't in
+    link-label text or a block whose breaks are off.
   - `gen_nodes_within_breaks`: build today's separator before `node` as before,
     and where `breaks_line_after_tag` holds, push
     `if_true_or(…, condition_resolvers::is_forcing_no_newlines(), separator, NewLine)`,
@@ -201,8 +214,9 @@ Formatting any output again leaves it unchanged.
 - `src/generation/gen_types.rs`: the context gets the link-label flag, the
   setext line starts (in their own field, since `gen_hard_break`, `gen_text`
   and `text_from` read `is_line_start`) and the breaks-off flag.
-- A trial implementation along these lines is about 130 lines in
-  `src/generation`, and gives every example below its expected output in each
+- A trial implementation along these lines adds about 180 lines to
+  `src/generation`, comments included, and gives every example above its
+  expected output in each
   `textWrap` mode.
 - Tests: add these spec files, all with `lineBreakAfterBr: true` except the
   last:
@@ -220,9 +234,11 @@ Formatting any output again leaves it unchanged.
   goes in all five `textWrap` files. Existing specs keep their expected output,
   since the option is off by default.
 - Rendering check: add `pulldown-cmark` (0.13) as a dev-dependency and a test
-  that renders each example's input and output to HTML, with the extensions
-  the formatter reads (tables, footnotes, strikethrough, task lists, definition
-  lists, GFM autolinks), and asserts the two are the same after removing the
-  whitespace that follows a `<br>` and collapsing other runs of whitespace to
-  one space. Whitespace after a forced line break isn't rendered, so this
-  checks that the added line break never changes the page.
+  that formats each example, and each existing spec case whose input holds a
+  `<br>`, with the option off and on, renders both outputs with every
+  pulldown-cmark option except smart punctuation, and asserts the HTML is the
+  same. Before comparing, whitespace after a `<br>` is removed and other runs
+  of whitespace are collapsed to one space, except inside `<pre>`-like
+  elements, where whitespace is shown. pulldown-cmark has no GFM `www.`
+  autolinks and doesn't let a table interrupt a paragraph, so the `www.` and
+  table exceptions are checked by the spec files only.

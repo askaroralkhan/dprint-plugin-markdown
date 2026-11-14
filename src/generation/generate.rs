@@ -736,6 +736,7 @@ fn breaks_line_after_tag(last_node: &Node, node: &Node, context: &Context) -> bo
     && !text.text.starts_with("www.")
     // a line holding only the tag at the start of a block is an html block
     && !context.is_block_line_start(last_node.span().start)
+    && !begins_source_line(last_node, context)
     // a line break would change the label the link is matched by
     && !context.is_in_link_label()
     && !context.are_br_line_breaks_off()
@@ -758,18 +759,29 @@ fn begins_with_delimiter_row(node: &Node, context: &Context) -> bool {
 }
 
 /// Whether the nodes hold an inline tag of an element whose content shows its
-/// line breaks, such as `<pre>`.
+/// line breaks, such as `<pre>`, or that a line break would break, such as
+/// `<script>`.
 fn holds_preformatted_tag(nodes: &[Node]) -> bool {
   nodes.iter().any(|node| match node {
     Node::Html(html) => {
       let name = html.text.trim_start_matches(['<', '/']);
-      ["pre", "listing", "xmp", "plaintext", "textarea"].iter().any(|tag| {
+      ["pre", "listing", "xmp", "plaintext", "textarea", "script", "style"].iter().any(|tag| {
         name.get(..tag.len()).is_some_and(|start| start.eq_ignore_ascii_case(tag))
           && !name[tag.len()..].starts_with(|c: char| c.is_ascii_alphanumeric() || c == '-')
       })
     }
     _ => holds_preformatted_tag(node.children()),
   })
+}
+
+/// Whether only whitespace and block quote markers come before the node on its
+/// line in the file, as after a callout's `[!NOTE]` line, where a block begins.
+fn begins_source_line(node: &Node, context: &Context) -> bool {
+  let start = node.span().start;
+  let line_start = context.file_text[..start].rfind('\n').map_or(0, |index| index + 1);
+  context.file_text[line_start..start]
+    .chars()
+    .all(|c| c.is_whitespace() || c == '>')
 }
 
 /// Where each line of a block's content starts: at its first node and after

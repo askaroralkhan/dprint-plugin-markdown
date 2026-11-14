@@ -122,6 +122,14 @@ a\
 a\
 <br>b
 
+!! spec example 13f !!
+a
+<br>b
+
+[expect]
+a
+<br>b
+
 !! spec example 14 !!
 <br><br>b
 
@@ -316,3 +324,18 @@ x <PRE>_a<br>b_</PRE>
 [expect]
 - a | b<br>c | d
   - | -
+
+!! spec example 44 !!
+> [!NOTE]
+> <br>b
+
+[expect]
+> [!NOTE]
+> <br>b
+
+!! spec example 45 !!
+x <script>s = "a<br>b"</script>
+
+[expect]
+x <script>s =
+"a<br>b"</script>

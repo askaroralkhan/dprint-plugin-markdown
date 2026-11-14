@@ -2,8 +2,8 @@
 
 A rendered line break after an inline `<br>` tag should also be a source line
 break, wherever adding one can't change the document. A
-[hard line break](https://spec.commonmark.org/0.31.2/#hard-line-breaks) (`\`)
-already behaves this way; `<br>` is the
+[hard line break](https://spec.commonmark.org/0.31.2/#hard-line-breaks) (`\`
+or two spaces at the end of a line) already behaves this way; `<br>` is the
 [raw HTML](https://spec.commonmark.org/0.31.2/#raw-html) spelling of the same
 [break](https://html.spec.whatwg.org/multipage/text-level-semantics.html#the-br-element).
 
@@ -29,14 +29,10 @@ that behaviour as an option.
 
 ## Definitions
 
-- **Break tag:** an inline raw HTML tag (not part of an
-  [HTML block](https://spec.commonmark.org/0.31.2/#html-blocks)) that is a start
-  tag named `br` in any letter case, with or without attributes, and with or
-  without a `/` before the `>`: `<br>`, `<BR>`, `<br/>`, `<br />`,
-  `<br class="x">`. These are not break tags: a `<br>` inside a code span or in
-  image alt text (`![a<br>b](/i)`, which is written as it was), `\<br>`,
-  `&lt;br&gt;`, and `</br>`, an invalid end tag that browsers repair into a
-  `<br>`.
+- **Break tag:** an inline HTML node (`Node::Html` that isn't an
+  [HTML block](https://spec.commonmark.org/0.31.2/#html-blocks)) holding a start
+  tag named `br` in any letter case, with or without attributes and a `/`
+  before the `>`: `<br>`, `<BR>`, `<br/>`, `<br />`, `<br class="x">`.
 - **What follows:** the next node after the break tag with the same parent
   (the paragraph, or the emphasis, link or other inline element holding the
   tag), skipping whitespace (spaces, tabs, and line endings). A tag that is the
@@ -136,7 +132,6 @@ footnote example includes the definition it needs.
 | 7  | `a<br class="x">b`                                                                                                        | `a<br class="x">⏎b`                                                                       |
 | 8  | `a<br><br>b`                                                                                                              | `a<br><br>⏎b`                                                                             |
 | 9  | `a<br>`                                                                                                                   | Unchanged.                                                                                |
-| 10 | `` `a<br>b` ``                                                                                                            | Unchanged.                                                                                |
 | 11 | `a</br>b`                                                                                                                 | Unchanged.                                                                                |
 | 12 | `a<br>- b`, `a<br># b`, `a<br>> b`, `a<br><div>b</div>`, `a<br>===`                                                       | Unchanged.                                                                                |
 | 13 | `<br>b`, `- <br>b`, `> <br>b`, `- [ ] <br>b`, `a\⏎<br>b`, and `<br>b⏎===` with `heading.kind: setext` (tag begins a line) | Unchanged.                                                                                |
@@ -158,7 +153,6 @@ footnote example includes the definition it needs.
 | 29 | `a<br>b` with `lineBreakAfterBr: false` (the default)                                                                     | Unchanged.                                                                                |
 | 30 | `[a<br>](/u)b` (tag last inside link text)                                                                                | Unchanged.                                                                                |
 | 31 | `_<br>b_ c` (tag first inside emphasis)                                                                                   | `_<br>⏎b_ c`                                                                              |
-| 32 | `![a<br>b](/i)` (image alt text)                                                                                          | Unchanged.                                                                                |
 | 33 | `a<br>www.example.com`                                                                                                    | Unchanged.                                                                                |
 | 34 | `a<br>https://example.com`                                                                                                | `a<br>⏎https://example.com`                                                               |
 | 35 | `a<br>[^1]: x⏎⏎[^1]: y` (footnote reference followed by `:`)                                                              | Unchanged.                                                                                |
@@ -227,3 +221,10 @@ Formatting any output again leaves it unchanged.
   An example that names a mode goes in that mode's file; every other example
   goes in all five `textWrap` files. Existing specs keep their expected output,
   since the option is off by default.
+- Rendering check: add `pulldown-cmark` (0.13) as a dev-dependency and a test
+  that renders each example's input and output to HTML, with the extensions
+  the formatter reads (tables, footnotes, strikethrough, task lists, definition
+  lists, GFM autolinks), and asserts the two are the same after removing the
+  whitespace that follows a `<br>` and collapsing other runs of whitespace to
+  one space. Whitespace after a forced line break isn't rendered, so this
+  checks that the added line break never changes the page.

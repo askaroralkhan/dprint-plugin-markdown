@@ -65,8 +65,7 @@ line break between the tag and what follows:
 
 The formatter writes the line break only when what follows is text that
 begins with an alphabetic character (Unicode `Alphabetic`, in any script).
-Nothing that starts a block at the start
-of a line begins with a letter: list markers, `#`, `>`, code fences, thematic
+Nothing that starts a block at the start of a line begins with one: list markers, `#`, `>`, code fences, thematic
 breaks, footnote definitions (`[^1]:`), HTML tags and comments, and setext
 underlines all begin with something else. Neither do another break tag (so
 `<br><br>` stays together) or a hard break. Other text, such as `**bold**`,
@@ -214,8 +213,8 @@ Formatting any output again leaves it unchanged.
 - `src/generation/gen_types.rs`: the context gets the link-label flag, the
   setext line starts (in their own field, since `gen_hard_break`, `gen_text`
   and `text_from` read `is_line_start`) and the breaks-off flag.
-- A trial implementation along these lines adds about 180 lines to
-  `src/generation`, comments included, and gives every example above its
+- A trial implementation along these lines adds about 190 lines to
+  `src/generation` (170 net), comments included, and gives every example above its
   expected output in each
   `textWrap` mode.
 - Tests: add these spec files, all with `lineBreakAfterBr: true` except the

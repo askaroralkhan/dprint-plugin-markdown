@@ -337,3 +337,26 @@ x <script>s = "a<br>b"</script>
 
 [expect]
 x <script>s = "a<br>b"</script>
+
+!! spec example 47 !!
+- a | b<br>c | d
+  * | -
+
+[expect]
+- a | b<br>c | d
+  - | -
+
+!! spec example 48 !!
+a | b<br>c | d
+* | -
+
+[expect]
+a | b<br>c | d
+
+- | -
+
+!! spec example 49 !!
+x <code>a<br>b</code>
+
+[expect]
+x <code>a<br>b</code>

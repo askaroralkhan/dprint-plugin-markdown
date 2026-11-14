@@ -389,6 +389,12 @@ fn gen_nodes_within_breaks<'a>(nodes: &[Node<'a>], context: &mut Context<'a>) ->
       }
     }
 
+    // a tag that gets a line break after it is kept beside what's before it, so
+    // that wrapping can't move it to the start of a line, where formatting the
+    // output again would read it as beginning one
+    let breaks_after_node =
+      is_break_tag(node) && node_iterator.peek().is_some_and(|next| breaks_line_after_tag(node, next, context));
+
     // todo: this area needs to be thought out more
     if let Some(last_node) = last_node {
       if matches!(
@@ -524,6 +530,8 @@ fn gen_nodes_within_breaks<'a>(nodes: &[Node<'a>], context: &mut Context<'a>) ->
                 } else if ends_with_literal_backslash(last_node) {
                   // the node before can't end a line, where its backslash
                   // would be read as a hard break
+                  separator.push_space();
+                } else if breaks_after_node {
                   separator.push_space();
                 } else {
                   separator.extend(get_space_or_newline_based_on_config(
@@ -752,10 +760,15 @@ fn keeps_br_lines(node: &Node, next: Option<&Node>, context: &Context) -> bool {
     && (holds_preformatted_tag(node.children()) || next.is_some_and(|next| begins_with_delimiter_row(next, context)))
 }
 
-/// Whether the node's first line is shaped like a table's delimiter row.
+/// Whether the node's first line is shaped like a table's delimiter row once
+/// its bullet, which the formatter may rewrite, is written as `-`.
 fn begins_with_delimiter_row(node: &Node, context: &Context) -> bool {
   let first_line = context.file_text[node.span().start..].lines().next().unwrap_or("");
-  crate::parser::is_table_delimiter_shape(first_line)
+  let first_line = match first_line.strip_prefix(['*', '+']) {
+    Some(rest) if matches!(node, Node::List(_)) => Cow::Owned(format!("-{rest}")),
+    _ => Cow::Borrowed(first_line),
+  };
+  crate::parser::is_table_delimiter_shape(&first_line)
 }
 
 /// Whether the nodes hold an inline tag of an element whose content shows its
@@ -765,7 +778,7 @@ fn holds_preformatted_tag(nodes: &[Node]) -> bool {
   nodes.iter().any(|node| match node {
     Node::Html(html) => {
       let name = html.text.trim_start_matches(['<', '/']);
-      ["pre", "listing", "xmp", "plaintext", "textarea", "script", "style"].iter().any(|tag| {
+      ["pre", "listing", "xmp", "plaintext", "textarea", "script", "style", "code"].iter().any(|tag| {
         name.get(..tag.len()).is_some_and(|start| start.eq_ignore_ascii_case(tag))
           && !name[tag.len()..].starts_with(|c: char| c.is_ascii_alphanumeric() || c == '-')
       })

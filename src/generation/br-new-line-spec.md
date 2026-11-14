@@ -57,8 +57,10 @@ line break between the tag and what follows:
 2. The tag is written exactly as it appeared (letter case, attributes, slash).
 3. The new line starts at the paragraph's indentation (list item, block quote,
    footnote, definition), just as after a hard break.
-4. If wrapping is active (`always`, `maintainAndWrap`), the new line is filled
-   and wrapped as usual, but the line break after the tag is never removed.
+4. If wrapping is active (`always`, `maintainAndWrap`), the text after the tag
+   is wrapped as usual, but the line break after the tag is never removed. The
+   space before such a tag is written as a plain space, not a place to wrap, so
+   wrapping can't move the tag to the start of a line.
 5. The rule also applies in the text of an inline or full reference link
    (`[a<br>b](/u)`, `[a<br>b][r]`), which `always`, `never` and `sentence`
    otherwise keep on one line, just as a `\` hard break there already does.
@@ -96,14 +98,16 @@ separator when:
   so a break would turn the text into a link. `http://` and `https://` are
   linked after a `>` already, so they aren't affected.
 - **The block after the paragraph begins with a line shaped like a table
-  delimiter row** (`- | -`), including a list item's first nested list
-  (`- a | b<br>c | d⏎  - | -`). A new line just above that row could become a
+  delimiter row** (`- | -`) once a bullet is written as `-`, which the
+  formatter may rewrite it to, including a list item's first nested list
+  (`- a | b<br>c | d⏎  - | -`, `- a | b<br>c | d⏎  * | -`). A new line just above that row could become a
   table's header. Deciding this by the next block, rather than by the next
   source line, gives the same output when the result is formatted again.
 - **The paragraph or setext heading holds an inline `<pre>`, `<listing>`,
-  `<xmp>`, `<plaintext>`, `<textarea>`, `<script>` or `<style>` tag** anywhere,
-  in any letter case (`x <pre>a<br>b</pre>`), since a source line break inside
-  one is shown, or breaks the script or style.
+  `<xmp>`, `<plaintext>`, `<textarea>`, `<script>`, `<style>` or `<code>` tag**
+  anywhere, in any letter case (`x <pre>a<br>b</pre>`), since a source line
+  break inside one is shown, breaks the script or style, or is kept by some
+  stylesheets for `<code>`.
 
 ## Out of scope
 
@@ -116,8 +120,9 @@ separator when:
     whitespace after a `<br>` (`[a<br>b]` with `[a<br> b]: /u`) becomes a link
     once the break is written;
   - CSS can show the break or hide the tag (`white-space: pre`, a `<br>` hidden
-    on small screens), and a `<pre>` opened in an earlier paragraph is still
-    open in a later one; the formatter reads neither.
+    on small screens), and a `<pre>` opened earlier in the file (in an HTML
+    block or an earlier paragraph) is still open later; the formatter reads
+    neither.
 
 ## Examples
 
@@ -174,6 +179,10 @@ match.
 | 43 | `- a \| b<br>c \| d⏎  - \| -`                                                                                                        | Unchanged.                                                                                |
 | 44 | `> [!NOTE]⏎> <br>b` (tag first on its line after a callout marker)                                                                   | Unchanged.                                                                                |
 | 45 | `x <script>s = "a<br>b"</script>`                                                                                                    | Unchanged.                                                                                |
+| 46 | `aaaa bbbb cccc dddd <br> eeee` with `textWrap: always` or `maintainAndWrap`, `lineWidth: 20`                                        | `aaaa bbbb cccc⏎dddd <br>⏎eeee`                                                           |
+| 47 | `- a \| b<br>c \| d⏎  * \| -`                                                                                                        | Unchanged.                                                                                |
+| 48 | `a \| b<br>c \| d⏎* \| -`                                                                                                            | Unchanged.                                                                                |
+| 49 | `x <code>a<br>b</code>`                                                                                                              | Unchanged.                                                                                |
 
 Formatting any output again leaves it unchanged.
 
@@ -194,7 +203,10 @@ Formatting any output again leaves it unchanged.
     line start of its paragraph or setext heading, or only whitespace and `>`
     between it and the start of its line in the file), and the context isn't in
     link-label text or a block whose breaks are off.
-  - `gen_nodes_within_breaks`: build today's separator before `node` as before,
+  - `gen_nodes_within_breaks`: where the tag `node` will get a break after it
+    (`breaks_line_after_tag` with the next node), write the space before it as
+    a plain space rather than one the printer may wrap at. Build today's
+    separator before `node` as before,
     and where `breaks_line_after_tag` holds, push
     `if_true_or(…, condition_resolvers::is_forcing_no_newlines(), separator, NewLine)`,
     as `gen_hard_break` does, so that an ATX heading, table cell or
@@ -202,7 +214,8 @@ Formatting any output again leaves it unchanged.
   - Before generating a paragraph or heading, turn its breaks off when it holds
     a `<pre>`-like tag (`holds_preformatted_tag`, which reads the nested nodes
     too) or when the next node's first line passes
-    `is_table_delimiter_shape` (`src/parser/block.rs`, made `pub`). `gen_item`
+    `is_table_delimiter_shape` (`src/parser/block.rs`, made `pub`), with a
+    `*` or `+` bullet read as `-`. `gen_item`
     does the same for an item's content when its first nested list begins
     that way, since an item keeps those in `sub_lists`.
   - `gen_heading`: only when the option is on, record a setext heading's line
@@ -213,8 +226,8 @@ Formatting any output again leaves it unchanged.
 - `src/generation/gen_types.rs`: the context gets the link-label flag, the
   setext line starts (in their own field, since `gen_hard_break`, `gen_text`
   and `text_from` read `is_line_start`) and the breaks-off flag.
-- A trial implementation along these lines adds about 190 lines to
-  `src/generation` (170 net), comments included, and gives every example above its
+- A trial implementation along these lines adds about 200 lines to
+  `src/generation` (180 net), comments included, and gives every example above its
   expected output in each
   `textWrap` mode.
 - Tests: add these spec files, all with `lineBreakAfterBr: true` except the

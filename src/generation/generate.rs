@@ -395,8 +395,10 @@ fn gen_nodes_within_breaks<'a>(nodes: &[Node<'a>], context: &mut Context<'a>) ->
     // a tag that gets a line break after it is kept beside what's before it, so
     // that wrapping can't move it to the start of a line, where formatting the
     // output again would read it as beginning one
-    let breaks_after_node =
-      is_break_tag(node) && node_iterator.peek().is_some_and(|next| breaks_line_after_tag(node, next, context));
+    let breaks_after_node = is_break_tag(node)
+      && node_iterator
+        .peek()
+        .is_some_and(|next| breaks_line_after_tag(node, next, context));
 
     // todo: this area needs to be thought out more
     if let Some(last_node) = last_node {
@@ -534,7 +536,7 @@ fn gen_nodes_within_breaks<'a>(nodes: &[Node<'a>], context: &mut Context<'a>) ->
                   // the node before can't end a line, where its backslash
                   // would be read as a hard break
                   separator.push_space();
-                } else if breaks_after_node {
+                } else if breaks_after_node || begins_line_with_tag(last_node, context) {
                   separator.push_space();
                 } else {
                   separator.extend(get_space_or_newline_based_on_config(
@@ -773,17 +775,33 @@ fn keeps_br_lines(node: &Node, next: Option<&Node>, context: &Context) -> bool {
     }
 }
 
-/// Whether the node could begin with a line that a new line above it would
-/// make a table's header: a bullet list whose first item begins with `|`, `:`
-/// or `-`, one of which a delimiter row written as a list item has right after
-/// its marker, or another block whose first line is shaped like a delimiter
-/// row. Neither changes when the formatter joins or wraps lines.
+/// Whether the node is a `<br>` tag that begins a line, which `lineBreakAfterBr`
+/// keeps the word after beside: wrapping there would leave the tag alone at the
+/// start of a block, where it begins an html block.
+fn begins_line_with_tag(node: &Node, context: &Context) -> bool {
+  context.configuration.line_break_after_br
+    && is_break_tag(node)
+    && (context.is_line_start(node.span().start) || begins_source_line(node, context))
+}
+
+/// Whether the node is a bullet list whose first item could begin with a
+/// table's delimiter row, so that a new line just above it could become the
+/// table's header: the item begins with `|`, which a delimiter row written as
+/// a list item (`- | -`) has right after its marker, or with a table or list,
+/// which the formatter may write that way. The formatter may rewrite the
+/// marker and join or wrap the item's lines, but it keeps the `|` where it is.
 fn may_begin_with_delimiter_row(node: &Node, context: &Context) -> bool {
-  let text = &context.file_text[node.span().start..];
-  match text.strip_prefix(['-', '*', '+']) {
-    Some(rest) if matches!(node, Node::List(_)) => rest.trim_start_matches([' ', '\t']).starts_with(['|', ':', '-']),
-    _ => crate::parser::is_table_delimiter_shape(text.lines().next().unwrap_or("")),
-  }
+  let Node::List(list) = node else {
+    return false;
+  };
+  let first_child = match list.children.first() {
+    Some(Node::Item(item)) => item.children.first(),
+    _ => None,
+  };
+  matches!(first_child, Some(Node::Table(_) | Node::List(_)))
+    || context.file_text[node.span().start..]
+      .strip_prefix(['-', '*', '+'])
+      .is_some_and(|rest| rest.trim_start_matches([' ', '\t']).starts_with('|'))
 }
 
 /// Whether the nodes hold an inline tag of an element whose content shows its
@@ -793,8 +811,22 @@ fn holds_preformatted_tag(nodes: &[Node]) -> bool {
   nodes.iter().any(|node| match node {
     Node::Html(html) => {
       let name = html.text.trim_start_matches(['<', '/']);
-      ["pre", "listing", "xmp", "plaintext", "textarea", "script", "style", "code", "tt"].iter().any(|tag| {
-        name.get(..tag.len()).is_some_and(|start| start.eq_ignore_ascii_case(tag))
+      [
+        "pre",
+        "listing",
+        "xmp",
+        "plaintext",
+        "textarea",
+        "script",
+        "style",
+        "code",
+        "tt",
+      ]
+      .iter()
+      .any(|tag| {
+        name
+          .get(..tag.len())
+          .is_some_and(|start| start.eq_ignore_ascii_case(tag))
           && !name[tag.len()..].starts_with(|c: char| c.is_ascii_alphanumeric() || c == '-')
       })
     }
@@ -2925,13 +2957,21 @@ fn gen_item<'a>(item: &Item<'a>, context: &mut Context<'a>) -> PrintItems<'a> {
   // an item's lists follow its content directly, so one beginning with what
   // looks like a delimiter row could make the line above it a table's header
   let sub_list_row = context.configuration.line_break_after_br
-    && item.sub_lists.first().is_some_and(|list| may_begin_with_delimiter_row(list, context));
+    && item
+      .sub_lists
+      .first()
+      .is_some_and(|list| may_begin_with_delimiter_row(list, context));
   if sub_list_row {
-    items.extend(context.with_br_line_breaks_off(|context| {
-      gen_task_list_marker_children(item.children, item.marker.as_ref(), context)
-    }));
+    items
+      .extend(context.with_br_line_breaks_off(|context| {
+        gen_task_list_marker_children(item.children, item.marker.as_ref(), context)
+      }));
   } else {
-    items.extend(gen_task_list_marker_children(item.children, item.marker.as_ref(), context));
+    items.extend(gen_task_list_marker_children(
+      item.children,
+      item.marker.as_ref(),
+      context,
+    ));
   }
 
   if let Some(first_sub_list) = item.sub_lists.first() {
@@ -3040,10 +3080,19 @@ fn gen_task_list_marker_children<'a>(
       ) || context.has_leading_blankline(c.span().start)
     })
     .unwrap_or(children.len());
-  items.extend(with_indent_times(
-    gen_nodes(&children[..indent_child_index_end], context),
-    marker_indent,
-  ));
+  // the children before a list are written apart from it, so a list there
+  // that could begin with a delimiter row is checked for here
+  let first_children = &children[..indent_child_index_end];
+  let first_items = if context.configuration.line_break_after_br
+    && children
+      .get(indent_child_index_end)
+      .is_some_and(|next| may_begin_with_delimiter_row(next, context))
+  {
+    context.with_br_line_breaks_off(|context| gen_nodes(first_children, context))
+  } else {
+    gen_nodes(first_children, context)
+  };
+  items.extend(with_indent_times(first_items, marker_indent));
   context.raw_indent_level -= marker_indent;
 
   // insert the remaining children without indent

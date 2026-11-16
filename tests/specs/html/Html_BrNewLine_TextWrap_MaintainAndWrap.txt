@@ -404,3 +404,25 @@ x <tt>a<br>b</tt>
 
 [expect]
 x <tt>a<br>b</tt>
+
+!! spec example 54 !!
+- [ ] a | b<br>c | d
+  - | -
+
+  more
+
+[expect]
+- [ ] a | b<br>c | d
+  - | -
+
+  more
+
+!! spec example 56 !!
+- a<br>b
+  - c | d
+    | - | - |
+
+[expect]
+- a<br>b
+  - | c | d |
+    | - | - |

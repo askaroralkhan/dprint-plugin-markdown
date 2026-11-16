@@ -1,7 +1,8 @@
 //! Formats every spec case whose input holds a `<br>` with `lineBreakAfterBr`
-//! off and on, renders both outputs with pulldown-cmark, and checks the two
-//! render to the same html, so that the line break the option writes after a
-//! `<br>` never changes the page.
+//! on, renders the output with pulldown-cmark, and checks it renders to the
+//! same html as the input, or as the output with the option off where today's
+//! formatter already changes the page, so that the line break the option
+//! writes after a `<br>` never changes it.
 //!
 //! Whitespace after a forced line break isn't rendered, and other runs of
 //! whitespace render as one space, so the html is compared with that
@@ -11,7 +12,8 @@
 //! pulldown-cmark has no GFM `www.` autolinks and doesn't let a table interrupt
 //! a paragraph, so the exceptions for those are checked by the spec files only.
 //! Its wikilinks, which aren't CommonMark or GFM, are left off: the formatter
-//! reads `[[a<br>b]]` as text, which text wrapping already splits today.
+//! reads `[[a<br>b]]` as text, which text wrapping already splits today. Its
+//! footnotes are GFM's, which the formatter writes, not the old syntax.
 
 use std::path::Path;
 
@@ -27,11 +29,23 @@ use pulldown_cmark::Parser;
 /// The elements whose content shows its whitespace, or breaks on a line break.
 /// `<code>` and `<tt>` are among them because some stylesheets, GitHub's among
 /// them, keep their whitespace.
-const PREFORMATTED: [&str; 9] = ["pre", "listing", "xmp", "plaintext", "textarea", "script", "style", "code", "tt"];
+const PREFORMATTED: [&str; 9] = [
+  "pre",
+  "listing",
+  "xmp",
+  "plaintext",
+  "textarea",
+  "script",
+  "style",
+  "code",
+  "tt",
+];
 
 fn render(markdown: &str) -> String {
   let mut options = Options::all();
-  options.remove(Options::ENABLE_SMART_PUNCTUATION | Options::ENABLE_WIKILINKS);
+  options.remove(Options::ENABLE_SMART_PUNCTUATION | Options::ENABLE_WIKILINKS | Options::ENABLE_OLD_FOOTNOTES);
+  // GFM's footnotes, which the formatter writes, rather than the old syntax
+  options.insert(Options::ENABLE_FOOTNOTES);
   let mut out = String::new();
   html::push_html(&mut out, Parser::new_ext(markdown, options));
   out
@@ -41,7 +55,9 @@ fn render(markdown: &str) -> String {
 fn preformatted_start(text: &str) -> Option<&'static str> {
   let name = text.strip_prefix('<')?;
   PREFORMATTED.into_iter().find(|tag| {
-    name.get(..tag.len()).is_some_and(|start| start.eq_ignore_ascii_case(tag))
+    name
+      .get(..tag.len())
+      .is_some_and(|start| start.eq_ignore_ascii_case(tag))
       && !name[tag.len()..].starts_with(|c: char| c.is_ascii_alphanumeric() || c == '-')
   })
 }
@@ -92,7 +108,10 @@ fn config_of(header: &str) -> ConfigKeyMap {
     let value = match value {
       "true" => ConfigKeyValue::from_bool(true),
       "false" => ConfigKeyValue::from_bool(false),
-      _ => value.parse().map(ConfigKeyValue::from_i32).unwrap_or_else(|_| ConfigKeyValue::from_str(value)),
+      _ => value
+        .parse()
+        .map(ConfigKeyValue::from_i32)
+        .unwrap_or_else(|_| ConfigKeyValue::from_str(value)),
     };
     map.insert(key.to_string(), value);
   }
@@ -100,9 +119,14 @@ fn config_of(header: &str) -> ConfigKeyMap {
 }
 
 fn format_with(input: &str, mut config: ConfigKeyMap, line_break_after_br: bool) -> String {
-  config.insert("lineBreakAfterBr".to_string(), ConfigKeyValue::from_bool(line_break_after_br));
+  config.insert(
+    "lineBreakAfterBr".to_string(),
+    ConfigKeyValue::from_bool(line_break_after_br),
+  );
   let config = resolve_config(config, &GlobalConfiguration::default()).config;
-  format_text(input, &config, |_, _, _| Ok(None)).unwrap().unwrap_or_else(|| input.to_string())
+  format_text(input, &config, |_, _, _| Ok(None))
+    .unwrap()
+    .unwrap_or_else(|| input.to_string())
 }
 
 /// Each spec file under the directory, at any depth.
@@ -140,10 +164,12 @@ fn br_line_breaks_keep_the_rendered_html() {
       }
       let off = format_with(input, config.clone(), false);
       let on = format_with(input, config.clone(), true);
-      assert_eq!(
-        normalize(&render(&off)),
-        normalize(&render(&on)),
-        "{}, {title}: lineBreakAfterBr changes the rendered html\n--- with it off\n{off}\n--- with it on\n{on}",
+      // the page with the option on matches the input's, or what the
+      // formatter writes today where that already differs from the input
+      let rendered = normalize(&render(&on));
+      assert!(
+        rendered == normalize(&render(input)) || rendered == normalize(&render(&off)),
+        "{}, {title}: lineBreakAfterBr changes the rendered html\n--- input\n{input}\n--- with it off\n{off}\n--- with it on\n{on}",
         path.display(),
       );
       checked += 1;
@@ -155,5 +181,8 @@ fn br_line_breaks_keep_the_rendered_html() {
 #[test]
 fn normalize_keeps_preformatted_whitespace() {
   assert_eq!(normalize("<p>a<br>\nb  c</p>"), "<p>a<br>b c</p>");
-  assert_eq!(normalize("<p>x <pre>a<br>\nb</pre></p>"), "<p>x <pre>a<br>\nb</pre></p>");
+  assert_eq!(
+    normalize("<p>x <pre>a<br>\nb</pre></p>"),
+    "<p>x <pre>a<br>\nb</pre></p>"
+  );
 }

@@ -86,9 +86,9 @@ separator when:
   its anchor is made from: GitHub turns spaces into hyphens and drops line
   breaks, so `a<br> b` would change its anchor from `#a-b` to `#ab`.
 - **The tag begins a line:** it is the first node of its paragraph, the first
-  node after a hard break, or the first thing on its line in the file after any
-  `>` markers and indentation (as after a callout's `[!NOTE]` line). A line
-  holding only the tag would start an
+  node after a hard break, or has a line ending between it and the node before
+  it (as after a callout's `[!NOTE]` line). A line holding only the tag would
+  start an
   [HTML block](https://spec.commonmark.org/0.31.2/#html-blocks) (type 7) where a
   block begins, which would turn what follows into raw HTML. Where a block can't
   begin, a break would be harmless, but it is left alone too to keep the check
@@ -107,15 +107,17 @@ separator when:
   so a break would turn the text into a link. GitHub links `http://` and
   `https://` after a `>` already, so they aren't affected, although the GFM
   spec's prose gives every extended autolink the same rule as `www.`.
-- **The block after the paragraph could begin with a table delimiter row:** it
-  is a bullet list whose first item begins with `|` right after its marker, as
-  every delimiter row written as a list item does (`- | -`, `* | -`), or begins
-  with a table or a list, which the formatter may write that way. This includes
+- **A new line could become a table's header:** the paragraph holds a
+  delimiter cell without a `|` (`:-:`, `-:`, `:--`), which GitHub reads as a
+  delimiter row on a line of its own (`a | b<br>c⏎:-:`); or the block after it
+  is a bullet list whose first item begins with `|` after its marker, as every
+  delimiter row written as a list item does (`- | -`, `* | -`, or `-` with the
+  `| -` on the next line), or whose first item begins with a table or a list,
+  which the formatter may write that way. This includes
   a list item's nested list, in a task-list item too
-  (`- [ ] a | b<br>c | d⏎  - | -`). A new line just above such a row could
-  become a table's header. These tests don't change when the formatter rewrites
-  a marker or joins or wraps lines, so the output is the same when the result is
-  formatted again.
+  (`- [ ] a | b<br>c | d⏎  - | -`). These tests don't change when the formatter
+  rewrites a marker or joins or wraps lines, so the output is the same when the
+  result is formatted again.
 - **The paragraph holds an inline `<pre>`, `<listing>`, `<xmp>`, `<plaintext>`,
   `<textarea>`, `<script>`, `<style>`, `<code>` or `<tt>` tag** anywhere, in
   any letter case (`x <pre>a<br>b</pre>`), since a source line break inside one
@@ -143,8 +145,11 @@ separator when:
   - the formatter's parser reads a `>` after a task-list box as a block quote,
     which CommonMark doesn't (`- [ ] > a<br>b`), and that already breaks
     `- [ ] > a⏎  b` with the option off;
-  - a renderer without footnotes reads a footnote's later, indented paragraphs
-    as code, where a break shows.
+  - a renderer without footnotes reads a footnote definition as a link
+    reference definition, which the break can complete (`[^1]: a<br>b`), and
+    its later, indented paragraphs as code, where a break shows; the same goes
+    for a definition's later paragraphs with `list.indentKind: pythonMarkdown`,
+    which indents them by 4.
 
 ## Examples
 
@@ -197,7 +202,7 @@ match.
 | 39 | `a<br>**b**`, `a<br>[b](/u)`                                                                            | Unchanged.                                                                                                                                   |
 | 40 | `a \| b<br>c \| d⏎- \| -`                                                                               | Unchanged.                                                                                                                                   |
 | 41 | `x <pre>a<br>b</pre>`, `x <PRE>_a<br>b_</PRE>`                                                          | Unchanged.                                                                                                                                   |
-| 42 | `# a<br>b`, `a<br> b⏎===` and `<br>b⏎===` with `heading.kind: setext`                                   | Unchanged (`a<br>b⏎=====`, `a<br> b⏎=======` and `<br>b⏎=====`, as today).                                                                   |
+| 42 | `# a<br>b`, `a<br> b⏎===` and `<br>b⏎===` with `heading.kind: setext`                                   | Unchanged (`a<br>b⏎======`, `a<br> b⏎=======` and `<br>b⏎=====`, as today).                                                                  |
 | 43 | `- a \| b<br>c \| d⏎  - \| -`                                                                           | Unchanged.                                                                                                                                   |
 | 44 | `> [!NOTE]⏎> <br>b` (tag first on its line after a callout marker)                                      | Unchanged.                                                                                                                                   |
 | 45 | `x <script>s = "a<br>b"</script>`                                                                       | Unchanged.                                                                                                                                   |
@@ -212,6 +217,8 @@ match.
 | 54 | `- [ ] a \| b<br>c \| d⏎  - \| -⏎⏎  more`                                                               | Unchanged.                                                                                                                                   |
 | 55 | `<br> https://example.com/a/long/path <br> See above.` with `textWrap: always, lineWidth: 20`           | `<br> https://example.com/a/long/path <br>⏎See above.` (today: `<br>⏎https://…⏎<br> See above.`, where the lone `<br>` starts an HTML block) |
 | 56 | `- a<br>b⏎  - c \| d⏎    \| - \| - \|`                                                                  | Unchanged.                                                                                                                                   |
+| 57 | `a⏎    > <br>b` (a `>` that is text, on a continuation line)                                            | `a > <br>⏎b`                                                                                                                                 |
+| 58 | `a \| b<br>c⏎:-:`                                                                                       | Unchanged.                                                                                                                                   |
 
 Formatting any output again leaves it unchanged.
 
@@ -226,37 +233,36 @@ Formatting any output again leaves it unchanged.
   - `is_break_tag(node)`: `node` is a `Node::Html` whose `is_block` field is
     `false` and whose text is `<`, then `br` in any ASCII case, then
     whitespace, `/` or `>`.
-  - `breaks_line_after_tag(last_node, node, context)`: the option is on,
-    `last_node` is a break tag, `node` is a `Text` node beginning with an
-    alphabetic character and not with `www.`, the tag doesn't begin a line (a
-    line start of its paragraph, or only whitespace and `>` between it and the
-    start of its line in the file), and the context isn't in link-label text
-    or a block whose breaks are off.
-  - `gen_nodes_within_breaks`: when the node is a break tag, decide once, with
-    `breaks_line_after_tag` and the next node, whether it gets a line break
-    after it. If it does, write the space before it as a plain space rather
-    than one the printer may wrap at; build today's separator after it as
-    before, and push
+  - `breaks_line_after_tag(next, context)`: the option is on, the node after
+    the tag is a `Text` node beginning with an alphabetic character and not
+    with `www.`, and the context isn't in link-label text or a block whose
+    breaks are off.
+  - `gen_nodes_within_breaks`: when the node is a break tag, decide once
+    whether it begins a line (a line start of its paragraph, or a line ending
+    between it and the node before it) and, if it doesn't, whether it gets a
+    line break after it, with `breaks_line_after_tag` and the next node. If it
+    gets one, write the space before it as a plain space rather than one the
+    printer may wrap at; build today's separator after it as before, and push
     `if_true_or(…, condition_resolvers::is_forcing_no_newlines(), separator, NewLine)`,
     as `gen_hard_break` does, so that a table cell or definition-list term is
-    written as today.
+    written as today. If it begins a line, write the space after it as a plain
+    space instead.
   - `keeps_br_lines`: before generating a block, turn its breaks off when it
-    is a heading; or a paragraph that begins with `[` and holds `]:`, that
-    holds a `<pre>`-like tag (`holds_preformatted_tag`, which reads the nested
-    nodes too), or whose next node is a bullet list that could begin with a
-    delimiter row (`may_begin_with_delimiter_row`: its first item begins with
-    `|`, or with a table or a list). `gen_item` does the same for an item's
-    content when its first nested list could, since an item keeps those in
-    `sub_lists`, and `gen_task_list_marker_children` for the children it
-    writes before a list.
-  - `begins_line_with_tag`: where a break tag begins a line, write the space
-    after it as a plain space too.
+    is a heading; or a paragraph that begins with `[` and holds `]:`, holds a
+    delimiter cell without a `|` (`is_bare_delimiter_cell`), holds a
+    `<pre>`-like tag (`holds_preformatted_tag`, which reads the nested nodes
+    too), or whose next node is a bullet list that could begin with a delimiter
+    row (`may_begin_with_delimiter_row`: its first item begins with `|`, after
+    any whitespace and line endings, or with a table or a list). `gen_item`
+    does the same for an item's content when its first nested list could, since
+    an item keeps those in `sub_lists`, and `gen_task_list_marker_children` for
+    the children it writes before a list.
   - `gen_link_text` marks link-label text when `is_the_name` is true;
     `is_preserving_decorations()` can't be reused, since the emphasis fallback
     in `gen_checked_decorations` sets it for a whole paragraph.
 - `src/generation/gen_types.rs`: the context gets the link-label flag and the
   breaks-off flag.
-- A trial implementation along these lines adds about 230 lines to
+- A trial implementation along these lines adds about 240 lines to
   `src/generation` (210 net), comments and rustfmt's layout included, and gives
   every example above its expected output in each `textWrap` mode.
 - Tests: add these spec files, all with `lineBreakAfterBr: true` except the

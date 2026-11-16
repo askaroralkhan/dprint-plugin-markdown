@@ -374,6 +374,9 @@ fn gen_nodes_within_breaks<'a>(nodes: &[Node<'a>], context: &mut Context<'a>) ->
   // where the `<br>` tag that gets a line break after it starts, decided once
   // for the space before the tag and the break after it
   let mut tag_with_break: Option<usize> = None;
+  // where the `<br>` tag that begins a line starts, which keeps the word after
+  // it beside it
+  let mut tag_beginning_line: Option<usize> = None;
 
   while let Some(mut node) = node_iterator.next() {
     // handle alternate lists
@@ -392,13 +395,22 @@ fn gen_nodes_within_breaks<'a>(nodes: &[Node<'a>], context: &mut Context<'a>) ->
       }
     }
 
+    // a tag begins a line where it begins its paragraph, follows a hard break,
+    // or has a line ending between it and the node before it. A line holding
+    // only the tag at the start of a block is an html block, so it gets no line
+    // break after it, and the word after it is kept beside it
+    let node_begins_line = context.configuration.line_break_after_br
+      && is_break_tag(node)
+      && (context.is_line_start(node.span().start)
+        || last_node.is_some_and(|last| context.get_new_lines_in_range(last.span().end, node.span().start) > 0));
     // a tag that gets a line break after it is kept beside what's before it, so
     // that wrapping can't move it to the start of a line, where formatting the
     // output again would read it as beginning one
     let breaks_after_node = is_break_tag(node)
+      && !node_begins_line
       && node_iterator
         .peek()
-        .is_some_and(|next| breaks_line_after_tag(node, next, context));
+        .is_some_and(|next| breaks_line_after_tag(next, context));
 
     // todo: this area needs to be thought out more
     if let Some(last_node) = last_node {
@@ -536,7 +548,7 @@ fn gen_nodes_within_breaks<'a>(nodes: &[Node<'a>], context: &mut Context<'a>) ->
                   // the node before can't end a line, where its backslash
                   // would be read as a hard break
                   separator.push_space();
-                } else if breaks_after_node || begins_line_with_tag(last_node, context) {
+                } else if breaks_after_node || tag_beginning_line == Some(last_node.span().start) {
                   separator.push_space();
                 } else {
                   separator.extend(get_space_or_newline_based_on_config(
@@ -624,6 +636,7 @@ fn gen_nodes_within_breaks<'a>(nodes: &[Node<'a>], context: &mut Context<'a>) ->
     }
     last_node = Some(node);
     tag_with_break = breaks_after_node.then(|| node.span().start);
+    tag_beginning_line = node_begins_line.then(|| node.span().start);
 
     // check for ignore comment
     if let Node::Html(html) = node {
@@ -738,18 +751,15 @@ fn is_break_tag(node: &Node) -> bool {
 /// node after it. That's only where the node is text beginning with a letter,
 /// which nothing that starts a block at the start of a line does, and where
 /// moving it there can't change the document otherwise.
-fn breaks_line_after_tag(last_node: &Node, node: &Node, context: &Context) -> bool {
-  let Node::Text(text) = node else {
+fn breaks_line_after_tag(next: &Node, context: &Context) -> bool {
+  let Node::Text(text) = next else {
     return false;
   };
+  // `last_node` is a break tag, which the caller checks
   context.configuration.line_break_after_br
-    && is_break_tag(last_node)
     && text.text.starts_with(char::is_alphabetic)
     // GitHub links `www.` at the start of a line, but not after the tag's `>`
     && !text.text.starts_with("www.")
-    // a line holding only the tag at the start of a block is an html block
-    && !context.is_line_start(last_node.span().start)
-    && !begins_source_line(last_node, context)
     // a line break would change the label the link is matched by
     && !context.is_in_link_label()
     && !context.are_br_line_breaks_off()
@@ -758,9 +768,10 @@ fn breaks_line_after_tag(last_node: &Node, node: &Node, context: &Context) -> bo
 /// Whether the `<br>` tags of a block get no line break after them: in a
 /// heading, whose text its anchor is made from; in a paragraph that begins
 /// like a link reference definition, which ending a line could complete; in a
-/// paragraph holding a tag whose content shows its line breaks; and in a
-/// paragraph followed by a block that could begin with a line a new line above
-/// would make the header of.
+/// paragraph holding a delimiter cell without a `|`, or followed by a block
+/// that could begin with a delimiter row, which a new line above could make a
+/// table's header; and in a paragraph holding a tag whose content shows its
+/// line breaks.
 fn keeps_br_lines(node: &Node, next: Option<&Node>, context: &Context) -> bool {
   context.configuration.line_break_after_br
     && match node {
@@ -768,6 +779,7 @@ fn keeps_br_lines(node: &Node, next: Option<&Node>, context: &Context) -> bool {
       Node::Paragraph(paragraph) => {
         let text = paragraph.span.text(context.file_text);
         (text.starts_with('[') && text.contains("]:"))
+          || text.split_whitespace().any(is_bare_delimiter_cell)
           || holds_preformatted_tag(node.children())
           || next.is_some_and(|next| may_begin_with_delimiter_row(next, context))
       }
@@ -775,13 +787,13 @@ fn keeps_br_lines(node: &Node, next: Option<&Node>, context: &Context) -> bool {
     }
 }
 
-/// Whether the node is a `<br>` tag that begins a line, which `lineBreakAfterBr`
-/// keeps the word after beside: wrapping there would leave the tag alone at the
-/// start of a block, where it begins an html block.
-fn begins_line_with_tag(node: &Node, context: &Context) -> bool {
-  context.configuration.line_break_after_br
-    && is_break_tag(node)
-    && (context.is_line_start(node.span().start) || begins_source_line(node, context))
+/// Whether the word is a table delimiter cell with a colon and no `|`
+/// (`:-:`, `-:`, `:--`), which GitHub reads as a delimiter row on a line of its
+/// own, so that a new line just above it could become a table's header.
+fn is_bare_delimiter_cell(word: &str) -> bool {
+  let dashes = word.strip_prefix(':').unwrap_or(word);
+  let dashes = dashes.strip_suffix(':').unwrap_or(dashes);
+  dashes.len() < word.len() && !dashes.is_empty() && dashes.bytes().all(|b| b == b'-')
 }
 
 /// Whether the node is a bullet list whose first item could begin with a
@@ -794,6 +806,9 @@ fn may_begin_with_delimiter_row(node: &Node, context: &Context) -> bool {
   let Node::List(list) = node else {
     return false;
   };
+  if list.start_index.is_some() {
+    return false;
+  }
   let first_child = match list.children.first() {
     Some(Node::Item(item)) => item.children.first(),
     _ => None,
@@ -801,7 +816,7 @@ fn may_begin_with_delimiter_row(node: &Node, context: &Context) -> bool {
   matches!(first_child, Some(Node::Table(_) | Node::List(_)))
     || context.file_text[node.span().start..]
       .strip_prefix(['-', '*', '+'])
-      .is_some_and(|rest| rest.trim_start_matches([' ', '\t']).starts_with('|'))
+      .is_some_and(|rest| rest.trim_start().starts_with('|'))
 }
 
 /// Whether the nodes hold an inline tag of an element whose content shows its
@@ -832,16 +847,6 @@ fn holds_preformatted_tag(nodes: &[Node]) -> bool {
     }
     _ => holds_preformatted_tag(node.children()),
   })
-}
-
-/// Whether only whitespace and block quote markers come before the node on its
-/// line in the file, as after a callout's `[!NOTE]` line, where a block begins.
-fn begins_source_line(node: &Node, context: &Context) -> bool {
-  let start = node.span().start;
-  let line_start = context.file_text[..start].rfind('\n').map_or(0, |index| index + 1);
-  context.file_text[line_start..start]
-    .chars()
-    .all(|c| c.is_whitespace() || c == '>')
 }
 
 /// Whether the node is a tag that would start an html block at the start of a

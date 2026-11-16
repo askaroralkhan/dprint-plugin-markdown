@@ -408,3 +408,19 @@ x <tt>a<br>b</tt>
 - a<br>b
   - | c | d |
     | - | - |
+
+!! spec example 57 !!
+a
+    > <br>b
+
+[expect]
+a > <br>
+b
+
+!! spec example 58 !!
+a | b<br>c
+:-:
+
+[expect]
+a | b<br>c
+:-:

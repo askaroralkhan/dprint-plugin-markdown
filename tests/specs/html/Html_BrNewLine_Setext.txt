@@ -29,3 +29,11 @@ a<br>* _b_
 [expect]
 a<br>b
 ======
+
+!! spec example 42b !!
+a<br> b
+===
+
+[expect]
+a<br> b
+=======

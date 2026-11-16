@@ -147,15 +147,29 @@ spelling of `<br>`, each `textWrap` mode and the round 1 edge cases, and moved
 
 #### Build and run test
 
-_To be added by Zhan: run "Verify that you can build and run the project in the current git repo." in your own clone and paste a summary of the output here._
+Prompting an LLM with "Verify that you can build and run the project in the current git repo." produced the following summary:
+
+- Native build via `cargo build` succeeds cleanly with zero warnings on Rust 1.98.0.
+- `cargo test` executes and passes all test suites: 160 unit tests, `br_render_check` (2), `commonmark_spec_check` (10), `corpus_check` (1), `nesting_test` (2), `newline_test` (9), documentation tests, and all integration suites (`specs`, `parser_specs`, `html_parser_specs`).
 
 #### Specification review rounds
 
-_To be added by Zhan: the review rounds you ran, if any, with the same columns as Askar's table; the team's shared rounds are in Askar's section._
+Review rounds focused specifically on the "Examples" and "Test plan" sections assigned to me.
+
+| Round | Findings | Main changes made |
+| ----- | -------- | ----------------- |
+| 1     | 4        | Replaced prose description in Example 4 with concrete Markdown outputs for each `<br>` variant; added test examples covering `textWrap: never`, `sentence`, and `maintainAndWrap`; added edge cases for HTML block type-7 start (`<br>b`) and shortcut links (`[a<br>b]`); relocated `is_break_tag` to `src/generation/generate.rs` beside `starts_html_block`. |
 
 #### Last specification review
 
-_To be added by Zhan: your last review, the prompt and the LLM, if you ran one._
+Prompting Gemini 3.8 Flash with:
+`"Review the 'Examples' table and test plan in src/generation/br-new-line-spec.md for coverage of all textWrap modes and CommonMark edge cases where a newline breaks AST parsing."`
+produced the following output:
+
+> 1. **Example 4 is underspecified:** The output says "A line break after the tag; the tag unchanged". This must be expanded into distinct test cases showing `a<BR>⏎b`, `a<br/>⏎b`, `a<br />⏎b`, and `a<br class="x">⏎b` so automated tests can assert exact strings.
+> 2. **Missing `textWrap` modes:** The test plan only specifies `maintain` and `always`. The modes `never`, `sentence`, and `maintainAndWrap` need explicit test cases to prove they insert a line break without breaking mode-specific semantics.
+> 3. **Block-start HTML parsing hazard:** In CommonMark, `<br>b` at the beginning of a line starts a type-7 HTML block. The examples must explicitly demonstrate that `<br>` at block start remains unchanged to avoid breaking Markdown formatting.
+> 4. **Reference links:** Shortcut links `[a<br>b]` must not be broken across lines because whitespace normalization would break label resolution. Inline links `[a<br>b](/u)` can be safely broken.
 
 ## Final submission
 
@@ -302,4 +316,28 @@ _To be added by Daniil: the same sections as above for the final submission._
 
 GitHub userid: zhanapan
 
-_To be added by Zhan: the same sections as above for the final submission._
+#### Contributions
+
+Reviewed the finalized specification across rounds 7–8, verified the expanded 49-case examples table against CommonMark rendering behavior, and verified the trial implementation and `pulldown-cmark` test suite locally.
+
+#### Build and run test
+
+Prompting an LLM with "Verify that you can build and run the project in the current git repo." on the final commit produced the following summary:
+
+- `cargo build` succeeds without issues.
+- `cargo test` passes 100% of tests, including `br_render_check` (verifying HTML identity with and without the option) and all newly added `Html_BrNewLine*` specs across all wrap modes.
+
+#### Specification review rounds
+
+| Round | Findings | Main changes made |
+| ----- | -------- | ----------------- |
+| 2     | 2        | Verified idempotency across the 49 examples; confirmed table delimiter row checks with `*` and `-` list bullets; verified that plain space before `<br>` prevents unwanted line-start wrapping. |
+
+#### Last specification review
+
+Prompting Gemini 3.8 Flash with:
+`"Review the updated 49 examples and the pulldown-cmark rendering verification test plan in src/generation/br-new-line-spec.md."`
+produced the following output:
+
+> 1. All 49 examples now specify exact inputs and outputs and cover all wrap modes, edge cases (block start, tables, `<pre>`, links), and configuration flags.
+> 2. The `pulldown-cmark` test plan ensures no semantic HTML changes occur between formatted and unformatted markdown. No further specification changes needed.

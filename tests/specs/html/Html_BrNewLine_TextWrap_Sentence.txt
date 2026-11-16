@@ -143,6 +143,13 @@ b
 [expect]
 # a<br>b
 
+!! spec example 16b !!
+a<br>b
+===
+
+[expect]
+# a<br>b
+
 !! spec example 17 !!
 | x |
 | - |
@@ -360,3 +367,28 @@ x <code>a<br>b</code>
 
 [expect]
 x <code>a<br>b</code>
+
+!! spec example 50a !!
+[x]: <br>b
+
+[expect]
+[x]: <br>b
+
+!! spec example 50b !!
+[x]: a<br>b c
+
+[expect]
+[x]: a<br>b c
+
+!! spec example 50c !!
+[x]:
+a<br>b c
+
+[expect]
+[x]: a<br>b c
+
+!! spec example 53 !!
+x <tt>a<br>b</tt>
+
+[expect]
+x <tt>a<br>b</tt>

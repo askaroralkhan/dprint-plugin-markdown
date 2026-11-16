@@ -225,9 +225,6 @@ pub struct Context<'a> {
   escaped_block_starts: Vec<BlockStartEscape>,
   /// Where each bit of text written at the start of a line starts.
   line_start_texts: LineStarts,
-  /// Where each line of the setext heading being written starts, which only
-  /// `lineBreakAfterBr` reads.
-  heading_line_starts: LineStarts,
   /// Where the block being written ends, which bounds how far the text of one
   /// of its lines can run.
   block_end: Option<usize>,
@@ -301,7 +298,6 @@ impl<'a> Context<'a> {
       escaped_closing_hashes: None,
       escaped_block_starts: Vec::new(),
       line_start_texts: LineStarts::default(),
-      heading_line_starts: LineStarts::default(),
       block_end: None,
       dropped_breaks: Default::default(),
       delimiter_runs: None,
@@ -550,20 +546,6 @@ impl<'a> Context<'a> {
 
   pub fn are_br_line_breaks_off(&self) -> bool {
     self.br_line_breaks_off_count > 0
-  }
-
-  /// Writes out a setext heading's content knowing where its lines start.
-  pub fn with_heading_line_starts<T>(&mut self, starts: LineStarts, func: impl FnOnce(&mut Context<'a>) -> T) -> T {
-    let previous = std::mem::replace(&mut self.heading_line_starts, starts);
-    let result = func(self);
-    self.heading_line_starts = previous;
-    result
-  }
-
-  /// Whether a line of the paragraph or setext heading being written starts
-  /// at the position.
-  pub fn is_block_line_start(&self, start: usize) -> bool {
-    self.line_start_texts.contains(start) || self.heading_line_starts.contains(start)
   }
 
   /// Runs within the content of a text decoration, so that the ones nested in

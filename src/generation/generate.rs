@@ -371,6 +371,9 @@ fn gen_nodes_within_breaks<'a>(nodes: &[Node<'a>], context: &mut Context<'a>) ->
 
   let mut last_node: Option<&Node> = None;
   let mut node_iterator = nodes.iter().filter(|n| !matches!(n, Node::SoftBreak(_))).peekable();
+  // where the `<br>` tag that gets a line break after it starts, decided once
+  // for the space before the tag and the break after it
+  let mut tag_with_break: Option<usize> = None;
 
   while let Some(mut node) = node_iterator.next() {
     // handle alternate lists
@@ -541,7 +544,7 @@ fn gen_nodes_within_breaks<'a>(nodes: &[Node<'a>], context: &mut Context<'a>) ->
                 }
               }
             }
-            if breaks_line_after_tag(last_node, node, context) {
+            if tag_with_break == Some(last_node.span().start) {
               // the separator written today stays where no line may be broken
               items.push_condition(if_true_or(
                 "lineBreakAfterBrOrSeparatorIfNewlinesDisabled",
@@ -618,6 +621,7 @@ fn gen_nodes_within_breaks<'a>(nodes: &[Node<'a>], context: &mut Context<'a>) ->
       items.extend(generate(node, context));
     }
     last_node = Some(node);
+    tag_with_break = breaks_after_node.then(|| node.span().start);
 
     // check for ignore comment
     if let Node::Html(html) = node {
@@ -722,10 +726,9 @@ fn is_break_tag(node: &Node) -> bool {
   let Node::Html(html) = node else {
     return false;
   };
-  let name_end = html.text.get(1..3).filter(|name| name.eq_ignore_ascii_case("br"));
   !html.is_block
     && html.text.starts_with('<')
-    && name_end.is_some()
+    && html.text.get(1..3).is_some_and(|name| name.eq_ignore_ascii_case("br"))
     && html.text[3..].starts_with(|c: char| c.is_ascii_whitespace() || c == '/' || c == '>')
 }
 
@@ -743,32 +746,44 @@ fn breaks_line_after_tag(last_node: &Node, node: &Node, context: &Context) -> bo
     // GitHub links `www.` at the start of a line, but not after the tag's `>`
     && !text.text.starts_with("www.")
     // a line holding only the tag at the start of a block is an html block
-    && !context.is_block_line_start(last_node.span().start)
+    && !context.is_line_start(last_node.span().start)
     && !begins_source_line(last_node, context)
     // a line break would change the label the link is matched by
     && !context.is_in_link_label()
     && !context.are_br_line_breaks_off()
 }
 
-/// Whether the `<br>` tags of a paragraph or heading get no line break after
-/// them: where the block holds a tag whose content shows its line breaks, and
-/// where the block after it begins with a line a new line above could become
-/// the header of.
+/// Whether the `<br>` tags of a block get no line break after them: in a
+/// heading, whose text its anchor is made from; in a paragraph that begins
+/// like a link reference definition, which ending a line could complete; in a
+/// paragraph holding a tag whose content shows its line breaks; and in a
+/// paragraph followed by a block that could begin with a line a new line above
+/// would make the header of.
 fn keeps_br_lines(node: &Node, next: Option<&Node>, context: &Context) -> bool {
   context.configuration.line_break_after_br
-    && matches!(node, Node::Paragraph(_) | Node::Heading(_))
-    && (holds_preformatted_tag(node.children()) || next.is_some_and(|next| begins_with_delimiter_row(next, context)))
+    && match node {
+      Node::Heading(_) => true,
+      Node::Paragraph(paragraph) => {
+        let text = paragraph.span.text(context.file_text);
+        (text.starts_with('[') && text.contains("]:"))
+          || holds_preformatted_tag(node.children())
+          || next.is_some_and(|next| may_begin_with_delimiter_row(next, context))
+      }
+      _ => false,
+    }
 }
 
-/// Whether the node's first line is shaped like a table's delimiter row once
-/// its bullet, which the formatter may rewrite, is written as `-`.
-fn begins_with_delimiter_row(node: &Node, context: &Context) -> bool {
-  let first_line = context.file_text[node.span().start..].lines().next().unwrap_or("");
-  let first_line = match first_line.strip_prefix(['*', '+']) {
-    Some(rest) if matches!(node, Node::List(_)) => Cow::Owned(format!("-{rest}")),
-    _ => Cow::Borrowed(first_line),
-  };
-  crate::parser::is_table_delimiter_shape(&first_line)
+/// Whether the node could begin with a line that a new line above it would
+/// make a table's header: a bullet list whose first item begins with `|`, `:`
+/// or `-`, one of which a delimiter row written as a list item has right after
+/// its marker, or another block whose first line is shaped like a delimiter
+/// row. Neither changes when the formatter joins or wraps lines.
+fn may_begin_with_delimiter_row(node: &Node, context: &Context) -> bool {
+  let text = &context.file_text[node.span().start..];
+  match text.strip_prefix(['-', '*', '+']) {
+    Some(rest) if matches!(node, Node::List(_)) => rest.trim_start_matches([' ', '\t']).starts_with(['|', ':', '-']),
+    _ => crate::parser::is_table_delimiter_shape(text.lines().next().unwrap_or("")),
+  }
 }
 
 /// Whether the nodes hold an inline tag of an element whose content shows its
@@ -778,7 +793,7 @@ fn holds_preformatted_tag(nodes: &[Node]) -> bool {
   nodes.iter().any(|node| match node {
     Node::Html(html) => {
       let name = html.text.trim_start_matches(['<', '/']);
-      ["pre", "listing", "xmp", "plaintext", "textarea", "script", "style", "code"].iter().any(|tag| {
+      ["pre", "listing", "xmp", "plaintext", "textarea", "script", "style", "code", "tt"].iter().any(|tag| {
         name.get(..tag.len()).is_some_and(|start| start.eq_ignore_ascii_case(tag))
           && !name[tag.len()..].starts_with(|c: char| c.is_ascii_alphanumeric() || c == '-')
       })
@@ -795,20 +810,6 @@ fn begins_source_line(node: &Node, context: &Context) -> bool {
   context.file_text[line_start..start]
     .chars()
     .all(|c| c.is_whitespace() || c == '>')
-}
-
-/// Where each line of a block's content starts: at its first node and after
-/// each hard break.
-fn line_starts_of(nodes: &[Node]) -> LineStarts {
-  let mut starts = LineStarts::default();
-  let mut at_line_start = true;
-  for node in nodes {
-    if at_line_start {
-      starts.push(node.span().start);
-    }
-    at_line_start = matches!(node, Node::HardBreak(_));
-  }
-  starts
 }
 
 /// Whether the node is a tag that would start an html block at the start of a
@@ -830,13 +831,7 @@ fn gen_heading<'a>(heading: &Heading<'a>, context: &mut Context<'a>) -> PrintIte
       .first()
       .is_some_and(|child| child.starts_block_at_block_start(context.file_text))
   {
-    let children = if context.configuration.line_break_after_br {
-      context.with_heading_line_starts(line_starts_of(heading.children), |context| {
-        gen_nodes(heading.children, context)
-      })
-    } else {
-      gen_nodes(heading.children, context)
-    };
+    let children = gen_nodes(heading.children, context);
     let (children, cloned_children) = clone_items(children);
 
     // render the heading text with the actual line width so wrapping is
@@ -2930,7 +2925,7 @@ fn gen_item<'a>(item: &Item<'a>, context: &mut Context<'a>) -> PrintItems<'a> {
   // an item's lists follow its content directly, so one beginning with what
   // looks like a delimiter row could make the line above it a table's header
   let sub_list_row = context.configuration.line_break_after_br
-    && item.sub_lists.first().is_some_and(|list| begins_with_delimiter_row(list, context));
+    && item.sub_lists.first().is_some_and(|list| may_begin_with_delimiter_row(list, context));
   if sub_list_row {
     items.extend(context.with_br_line_breaks_off(|context| {
       gen_task_list_marker_children(item.children, item.marker.as_ref(), context)

@@ -10,6 +10,8 @@
 //!
 //! pulldown-cmark has no GFM `www.` autolinks and doesn't let a table interrupt
 //! a paragraph, so the exceptions for those are checked by the spec files only.
+//! Its wikilinks, which aren't CommonMark or GFM, are left off: the formatter
+//! reads `[[a<br>b]]` as text, which text wrapping already splits today.
 
 use std::path::Path;
 
@@ -23,11 +25,13 @@ use pulldown_cmark::Options;
 use pulldown_cmark::Parser;
 
 /// The elements whose content shows its whitespace, or breaks on a line break.
-const PREFORMATTED: [&str; 7] = ["pre", "listing", "xmp", "plaintext", "textarea", "script", "style"];
+/// `<code>` and `<tt>` are among them because some stylesheets, GitHub's among
+/// them, keep their whitespace.
+const PREFORMATTED: [&str; 9] = ["pre", "listing", "xmp", "plaintext", "textarea", "script", "style", "code", "tt"];
 
 fn render(markdown: &str) -> String {
   let mut options = Options::all();
-  options.remove(Options::ENABLE_SMART_PUNCTUATION);
+  options.remove(Options::ENABLE_SMART_PUNCTUATION | Options::ENABLE_WIKILINKS);
   let mut out = String::new();
   html::push_html(&mut out, Parser::new_ext(markdown, options));
   out

@@ -12,9 +12,8 @@ a<br>b
 ===
 
 [expect]
-a<br>
-b
-=====
+a<br>b
+======
 
 !! spec example 37 !!
 a<br>* *b*
@@ -28,6 +27,5 @@ a<br>* _b_
 # a<br>b
 
 [expect]
-a<br>
-b
-=====
+a<br>b
+======

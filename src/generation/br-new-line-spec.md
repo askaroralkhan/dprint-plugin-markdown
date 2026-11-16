@@ -78,8 +78,8 @@ something else. Neither do another break tag (so `<br><br>` stays together) or a
 hard break. Other text, such as `**bold**`, `` `code` `` or `[a link](/u)`,
 stays on the tag's line, which keeps the rule simple.
 
-Even when what follows begins with a letter, the formatter writes today's
-separator when:
+Even when what follows begins with a letter, the formatter writes no line break
+after the tag when:
 
 - **The tag is in a heading (ATX or setext), a table cell or a definition-list
   term.** Most of these are written on one line, and a heading's text is what
@@ -87,8 +87,8 @@ separator when:
   breaks, so `a<br> b` would change its anchor from `#a-b` to `#ab`.
 - **The tag begins a line:** it is the first node of its paragraph, the first
   node after a hard break, or has a line ending between it and the node before
-  it (as after a callout's `[!NOTE]` line). A line holding only the tag would
-  start an
+  it with the same parent (as after a callout's `[!NOTE]` line). A line holding
+  only the tag would start an
   [HTML block](https://spec.commonmark.org/0.31.2/#html-blocks) (type 7) where a
   block begins, which would turn what follows into raw HTML. Where a block can't
   begin, a break would be harmless, but it is left alone too to keep the check
@@ -110,14 +110,15 @@ separator when:
 - **A new line could become a table's header:** the paragraph holds a
   delimiter cell without a `|` (`:-:`, `-:`, `:--`), which GitHub reads as a
   delimiter row on a line of its own (`a | b<br>c⏎:-:`); or the block after it
-  is a bullet list whose first item begins with `|` after its marker, as every
-  delimiter row written as a list item does (`- | -`, `* | -`, or `-` with the
-  `| -` on the next line), or whose first item begins with a table or a list,
-  which the formatter may write that way. This includes
+  is a bullet list whose first item's text begins with `|`, as every delimiter
+  row written as a list item does (`- | -`, `* | -`, also with the `| -` on the
+  next line or inside a block quote), or whose first item begins with a table or
+  a list, which the formatter may write that way. This includes
   a list item's nested list, in a task-list item too
-  (`- [ ] a | b<br>c | d⏎  - | -`). These tests don't change when the formatter
-  rewrites a marker or joins or wraps lines, so the output is the same when the
-  result is formatted again.
+  (`- [ ] a | b<br>c | d⏎  - | -`). These tests read the parsed list and the
+  paragraph's words, with a `\` hard break left off a word, so they don't change
+  when the formatter rewrites a marker or a hard break or joins or wraps lines,
+  and the output is the same when the result is formatted again.
 - **The paragraph holds an inline `<pre>`, `<listing>`, `<xmp>`, `<plaintext>`,
   `<textarea>`, `<script>`, `<style>`, `<code>` or `<tt>` tag** anywhere, in
   any letter case (`x <pre>a<br>b</pre>`), since a source line break inside one
@@ -131,7 +132,8 @@ separator when:
 - Converting between `<br>` and `\` or two-space hard breaks. `hardBreakKind`
   still applies only to the latter.
 - Wikilinks (`[[a<br>b]]`), which aren't CommonMark or GFM. The formatter reads
-  them as text, which text wrapping already splits today.
+  them as text, so the break is written there (`[[a<br>⏎b]]`), as text wrapping
+  already splits them today.
 - Known limitations, rare enough to leave:
   - bracketed text whose label differs from a link definition only by the
     whitespace after a `<br>` (`[a<br>b]` with `[a<br> b]: /u`) becomes a link
@@ -143,8 +145,13 @@ separator when:
   - GitHub has no definition lists, so in `Term⏎: > a<br>b` the new `  > b`
     line starts a block quote there;
   - the formatter's parser reads a `>` after a task-list box as a block quote,
-    which CommonMark doesn't (`- [ ] > a<br>b`), and that already breaks
+    and `[r]: /u` there as a link reference definition, which CommonMark
+    doesn't (`- [ ] > a<br>b`, `- [ ] [r]: /u a<br>b`); the first already breaks
     `- [ ] > a⏎  b` with the option off;
+  - wrapping can leave an inline tag other than `<br>` alone at the start of a
+    block, where it starts an HTML block; today's formatter already does this
+    (`- </span> aaaaaaaaaaaaaaaa` at width 16), and rule 4's plain space can
+    move a wrap onto it (`- </span> aaaa <br>b` at width 16);
   - a renderer without footnotes reads a footnote definition as a link
     reference definition, which the break can complete (`[^1]: a<br>b`), and
     its later, indented paragraphs as code, where a break shows; the same goes
@@ -219,6 +226,8 @@ match.
 | 56 | `- a<br>b⏎  - c \| d⏎    \| - \| - \|`                                                                  | Unchanged.                                                                                                                                   |
 | 57 | `a⏎    > <br>b` (a `>` that is text, on a continuation line)                                            | `a > <br>⏎b`                                                                                                                                 |
 | 58 | `a \| b<br>c⏎:-:`                                                                                       | Unchanged.                                                                                                                                   |
+| 59 | `> a<br>b⏎>⏎> -⏎>   \| -` (the list check inside a block quote)                                         | Unchanged.                                                                                                                                   |
+| 60 | `a<br>b -:␣␣⏎c` (`␣` is a space; a two-space hard break after a delimiter cell)                         | Unchanged.                                                                                                                                   |
 
 Formatting any output again leaves it unchanged.
 
@@ -247,23 +256,23 @@ Formatting any output again leaves it unchanged.
     as `gen_hard_break` does, so that a table cell or definition-list term is
     written as today. If it begins a line, write the space after it as a plain
     space instead.
-  - `keeps_br_lines`: before generating a block, turn its breaks off when it
-    is a heading; or a paragraph that begins with `[` and holds `]:`, holds a
-    delimiter cell without a `|` (`is_bare_delimiter_cell`), holds a
-    `<pre>`-like tag (`holds_preformatted_tag`, which reads the nested nodes
-    too), or whose next node is a bullet list that could begin with a delimiter
-    row (`may_begin_with_delimiter_row`: its first item begins with `|`, after
-    any whitespace and line endings, or with a table or a list). `gen_item`
-    does the same for an item's content when its first nested list could, since
-    an item keeps those in `sub_lists`, and `gen_task_list_marker_children` for
-    the children it writes before a list.
+  - `keeps_br_lines`: before generating a block, turn its breaks off when it is
+    a heading; or a paragraph that begins with `[` and holds `]:`, holds a
+    delimiter cell without a `|` (`is_bare_delimiter_cell`, on each word with a
+    trailing `\` left off), holds a `<pre>`-like tag (`holds_preformatted_tag`,
+    which reads the nested nodes too), or whose next node is a bullet list that
+    could begin with a delimiter row (`may_begin_with_delimiter_row`: its first
+    item begins with a paragraph whose text starts with `|`, or with a table or
+    a list). `gen_item` does the same for an item's content when its first
+    nested list could, since an item keeps those in `sub_lists`, and
+    `gen_task_list_marker_children` for the children it writes before a list.
   - `gen_link_text` marks link-label text when `is_the_name` is true;
     `is_preserving_decorations()` can't be reused, since the emphasis fallback
     in `gen_checked_decorations` sets it for a whole paragraph.
 - `src/generation/gen_types.rs`: the context gets the link-label flag and the
   breaks-off flag.
 - A trial implementation along these lines adds about 240 lines to
-  `src/generation` (210 net), comments and rustfmt's layout included, and gives
+  `src/generation` (220 net), comments and rustfmt's layout included, and gives
   every example above its expected output in each `textWrap` mode.
 - Tests: add these spec files, all with `lineBreakAfterBr: true` except the
   last:

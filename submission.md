@@ -156,8 +156,8 @@ Prompting an LLM with "Verify that you can build and run the project in the curr
 
 Review rounds focused specifically on the "Examples" and "Test plan" sections assigned to me.
 
-| Round | Findings | Main changes made |
-| ----- | -------- | ----------------- |
+| Round | Findings | Main changes made                                                                                                                                                                                                                                                                                                                                               |
+| ----- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 1     | 4        | Replaced prose description in Example 4 with concrete Markdown outputs for each `<br>` variant; added test examples covering `textWrap: never`, `sentence`, and `maintainAndWrap`; added edge cases for HTML block type-7 start (`<br>b`) and shortcut links (`[a<br>b]`); relocated `is_break_tag` to `src/generation/generate.rs` beside `starts_html_block`. |
 
 #### Last specification review
@@ -178,18 +178,21 @@ response:
 
 - A hard break can also be two trailing spaces; a break tag is defined by the
   parser's `Node::Html`, so the list of non-cases went.
-- Checking the implementation: it adds about 200 lines to `src/generation` (180
-  net) and 28 lines of option plumbing. With the option off, every existing
-  test passes unchanged; with it on, every example gives its expected output in
-  each `textWrap` mode. Writing it showed two exceptions could be stated more
-  simply, and the spec now does.
+- Checking the implementation: it adds about 240 lines to `src/generation` (220
+  net, with rustfmt's layout) and 28 lines of option plumbing. With the option
+  off, every existing test passes unchanged; with it on, every example gives
+  its expected output in each `textWrap` mode. Writing it showed several
+  exceptions could be stated more simply, and the spec now does.
 - `tests/br_render_check.rs` formats every spec case holding a `<br>` with the
-  option off and on, renders both with pulldown-cmark and checks the HTML is
-  the same. Removing the line-start or `<pre>` exception makes it fail.
+  option on, renders it with pulldown-cmark and checks the HTML is the same as
+  the input's, or as today's output's. Removing the line-start or `<pre>`
+  exception makes it fail.
 - Reviews that run code: the draft's rounds were read-only, so the reviewer
-  couldn't run anything. From round 7 on, each review ran in a throwaway
-  worktree of the implementation, where the reviewer could write scratch files
-  and run `cargo`.
+  couldn't run anything. From round 7 on, every specification and
+  implementation review ran in a throwaway worktree of the implementation, where
+  the reviewer could write scratch tests and run `cargo`; from specification
+  round 9 and implementation round 2 on, the reviewers also fuzzed the
+  formatter with up to about 120,000 random documents.
 
 ### Askar Oralkhan
 
@@ -199,8 +202,8 @@ GitHub userid: askaroralkhan
 
 Applied the instructor's review, wrote the implementation and its tests (the
 `Html_BrNewLine*` spec files and the pulldown-cmark rendering check), and ran
-specification review rounds 7–8 with the reviewer able to run code (with Claude
-Opus 5.5).
+specification review rounds 7–12 and implementation review rounds 1–4 with the
+reviewer able to run code (with Claude Opus 5.5).
 
 #### Specification review rounds
 
@@ -208,103 +211,153 @@ These continue the draft's numbering.
 
 | Round | Findings | Main changes made                                                                                                                                                                                                                                                                                                                                                |
 | ----- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 7     | 5        | Reviewer runs code from here on. A tag first on its line in the file is left alone, which covers a callout's `[!NOTE]` line; `<script>`/`<style>` join the `<pre>`-like tags; the rendering check compares option off and on over every spec case holding a `<br>` and keeps `<pre>` whitespace; CSS limitations stated; an unverified mdBook claim struck       |
-| 8     | 5        | Findings below, all applied: wrapping could move a tag to a line start, which a second pass read differently, so the space before a tag that gets a break is a plain space; the table check reads a `*`/`+` bullet as `-`, as the formatter writes it; `<code>` joins the `<pre>`-like tags; a `<pre>` opened anywhere earlier in the file is a known limitation |
+| 7     | 5        | Reviewer runs code from here on. A tag first on its line is left alone, which covers a callout's `[!NOTE]` line; `<script>`/`<style>` join the `<pre>`-like tags; the rendering check runs over every spec case holding a `<br>` and keeps `<pre>` whitespace; CSS limitations stated; an unverified mdBook claim struck                                         |
+| 8     | 5        | Wrapping could move a tag to a line start, which a second pass read differently, so the space before a tag that gets a break is a plain space; the table check reads a `*`/`+` bullet as `-`; `<code>` joins the `<pre>`-like tags; a `<pre>` opened earlier in the file is a known limitation                                                                   |
+| 9     | 5        | A paragraph that begins like a link reference definition (`[x]: <br>b`) gets no break; the table check made stable when lines are joined or wrapped; `<tt>` joins the `<pre>`-like tags; the render check keeps `<code>`/`<tt>` whitespace                                                                                                                       |
+| 10    | 11       | A list whose first item begins with a table or list counts for the table check; a `<br>` that begins a line keeps the next word beside it, so wrapping can't leave it alone where a block begins; the render check compares with the input or today's output; definition lists on GitHub and `>` after a task box listed as known limitations; six wording fixes |
+| 11    | 4        | "Begins a line" decided from the parsed tree (a text `>` on an indented line was unstable); a footnote read as a link reference definition listed as a known limitation; example 42's underline fixed; the table-or-list check limited to bullet lists                                                                                                           |
+| 12    | 6        | Findings below, all applied: the table check reads the parsed list (a `>` prefix inside a block quote was unstable) and ignores a `\` hard break on a delimiter cell; two older formatter hazards the option can reach listed as known limitations; two wording fixes                                                                                            |
 
 #### Last specification review
 
 Prompting Claude Opus 5.5 (`claude-opus-5-5`), extra high effort (`xhigh`), in
 Claude Code 2.1.280, running in a throwaway worktree of the implementation
-where it could write scratch files and run `cargo`, with
+where it could write scratch tests and run `cargo`, with
 `Review the spec in src/generation/br-new-line-spec.md.` produced the following
-output on spec 57f5b93 and implementation 0e411db; strikethrough indicates LLM
-output that we deemed incorrect or irrelevant. There is none: all five findings
-were applied in 7c8b2ef, the last one (GitHub's `<code>` styling, which the
-reviewer couldn't confirm) by adding `<code>` to the `<pre>`-like tags, which
-can only hold breaks back.
+output on 801e69a; strikethrough indicates LLM output that we deemed incorrect
+or irrelevant. There is none: findings 1, 2 and the two wording points were
+applied, and findings 3 and 4 were added to the known limitations, as the
+reviewer suggested.
 
-> I found two real bugs. Both break the spec's promise that formatting the output again leaves it unchanged (`br-new-line-spec.md:178`). I ran the trial implementation to confirm each one.
+> Spec review, round 12: I found two real bugs. Both break the spec's promise that "Formatting any output again leaves it unchanged" (line 223), and both are in the table exception's text checks. I also found two smaller gaps that should probably be listed as known limitations, plus two wording points.
 >
-> I didn't edit the spec. For testing I added temporary scratch files under `tests/`, then deleted them, so the working tree is clean. `cargo test` passes.
+> I ran the implementation to confirm everything below; `cargo test` passes. My scratch test file is deleted, the tree is clean, and I didn't edit the spec.
 >
-> ## 1. Wrapping can put the tag at the start of a line, and the second pass changes it (high)
+> ## 1. The bullet-list check doesn't skip a `>` prefix (medium)
 >
-> The "tag begins a line" exception (`br-new-line-spec.md:82`) is decided by where the tag sits in the input file. In `always` and `maintainAndWrap`, the space before a tag is a point where the line can wrap. When the tag lands right at the line width, the line wraps there:
+> The Implementation section (lines 255–256) says the check passes when the list's first item "begins with `|`, after any whitespace and line endings". The code does exactly that (`generate.rs:819`). Inside a block quote, though, a `>` sits between the line ending and the `|`, so the check misses it. The formatter then pulls the `| -` up beside the marker, and the second pass sees `- | -`.
 >
-> 1. Pass 1 puts `<br>` at the start of a line and still writes the break after it.
-> 2. Pass 2 sees the tag beginning a line in the file, so the exception applies and the break is joined back up.
+> `> a<br>b⏎>⏎> -⏎>   | -` with `textWrap: always`, `never` or `sentence`:
 >
-> With `textWrap: always, lineWidth: 40`:
+> - Pass 1: `> a<br>⏎> b⏎>⏎> - | -`
+> - Pass 2: `> a<br> b⏎>⏎> - | -`
 >
-> ```
-> Lorem ipsum dolor sit amet, consectetur <br> adipiscing elit, sed do eiusmod <br> tempor incididunt ut labore et dolore <br> magna aliqua.
-> ```
+> The same thing happens with `*` as the marker, and with the list inside an item in a block quote. With a blank line between the paragraph and the list, no table can form, so the problem is stability only.
 >
-> Pass 1:
+> **Fix:** decide this from the parsed tree, not the source text. The test would be: the first item's first child is a paragraph whose text starts with `|`. A paragraph's span already starts after its container prefix. Then reword lines 255–256 to match and add this input as an example.
 >
-> ```
-> Lorem ipsum dolor sit amet, consectetur
-> <br>
-> adipiscing elit, sed do eiusmod <br>
-> tempor incididunt ut labore et dolore
-> <br>
-> magna aliqua.
-> ```
+> ## 2. The bare delimiter-cell check flips when a hard break is rewritten (medium-low)
 >
-> Pass 2:
+> `is_bare_delimiter_cell` runs on the paragraph's source split at whitespace (`generate.rs:782`). The formatter rewrites a two-space hard break as `\`, which sticks to the word before it.
 >
-> ```
-> Lorem ipsum dolor sit amet, consectetur
-> <br> adipiscing elit, sed do eiusmod
-> <br>
-> tempor incididunt ut labore et dolore
-> <br> magna aliqua.
-> ```
+> `a<br>b -:␣␣⏎c` (two trailing spaces), in any mode:
 >
-> - **Other inputs:** the same thing happens in bullet and ordered list items, in block quotes, and after a code span.
-> - **`maintainAndWrap`:** the output is stable, but uneven. A file already wrapped as `…⏎<br> eeee` never gets the break.
-> - **Why the tests miss it:** no existing spec case has a tag right at the line width. I ran every spec case containing `<br>` in all five modes at widths 80, 20 and 12 (3,735 runs), and none failed. Only inputs built for this case fail.
+> - Pass 1 holds the break back because of `-:`, and writes `a<br>b -:\⏎c`.
+> - Pass 2 sees the word `-:\`, which isn't a bare cell, and writes `a<br>⏎b -:\⏎c`.
 >
-> **Suggested fix:** wherever the rule would write a break after a tag, write the separator before the tag as a plain space. Wrapping then can't separate the tag from what comes before it. Add an example such as `aaaa bbbb cccc dddd <br> eeee` with `textWrap: always, lineWidth: 20`, giving `aaaa bbbb cccc⏎dddd <br>⏎eeee`.
+> It also fails the other way round: with `hardBreakKind: doubleSpace` and `textWrap: always`, `a<br>b -:\⏎c` gives `a<br>⏎b -:␣␣⏎c` on pass 1, then `a<br> b -:␣␣⏎c` on pass 2.
 >
-> ## 2. The delimiter-row check reads the list marker from the file, but the formatter rewrites it (medium)
+> So the claim at lines 118–120 ("These tests don't change when the formatter rewrites a marker or joins or wraps lines") doesn't cover hard breaks.
 >
-> The table exception (`:98–102`) checks the next block's first line as it appears in the file (`generate.rs:756`, `generate.rs:2919`). But the formatter rewrites bullet markers, and only `-` makes the delimiter shape. This fails in three ways:
+> **Fix:** drop a trailing `\` from each word before the check. Add "or rewrites a hard break" to that sentence, and add this input as an example.
 >
-> - **A `*` sub-list becomes a table.** With the default list marker, `- a | b<br>c | d⏎  * | -` is written with the break, and the sub-list becomes `- | -`. Pass 2 then reads `c | d` over `- | -` as a table and writes `| c | d |⏎| - | - |`. So the second pass turns a nested list into a real table.
-> - **With `unorderedListKind: asterisks`.** `- a | b<br>c | d⏎  - | -` holds the break back in pass 1 and writes `* | -`. Pass 2 then writes the break.
-> - **At top level, in modes that join lines.** With `textWrap: never`, `a | b<br>c | d⏎* | -` gives `a | b<br>⏎c | d⏎⏎- | -` on pass 1 and `a | b<br> c | d⏎⏎- | -` on pass 2.
+> ## 3. Rule 4's plain space can move a wrap onto a hazard the formatter already has (low; the page changes)
 >
-> So the spec's own claim, "Deciding this by the next block … gives the same output when the result is formatted again", doesn't hold yet.
+> `- </span> aaaa <br>b` with `textWrap: always`, `lineWidth: 16`:
 >
-> **Suggested fix:** for a bullet list, test its first line with the marker read as `-`, whatever the file or the config uses. Change that sentence in the Rule and the `gen_item` bullet in Implementation (`:203–207`) to match, and add the three cases as examples.
+> - **Option off:** `- </span> aaaa⏎  <br>b`, which renders like the input.
+> - **Option on:** `aaaa <br>` can't be split, so the line wraps earlier: `- </span>⏎  aaaa <br>⏎  b`.
 >
-> ## Minor points
+> `</span>` is now alone on the item's first line. That starts an HTML block (type 7), so the rest of the item becomes raw HTML.
 >
-> - **Rule 4 (`:60`):** "filled" doesn't fit `maintainAndWrap`, which keeps line breaks and only wraps long lines.
-> - **`<pre>` limitation (`:119`):** "a `<pre>` opened in an earlier paragraph" misses the likelier case. That's an HTML block such as `<div><pre>`, then a blank line, then Markdown. "Opened earlier in the file" covers both.
-> - **Unverified:** I believe GitHub's stylesheet sets `white-space: break-spaces` on inline `code`. If so, the formatter's `x <code>a<br>⏎b</code>` would show an extra line on GitHub. I couldn't confirm it because the web fetch was declined. If it's true, it belongs in the known limitations or the `<pre>`-like list.
+> Today's formatter already does this at other widths. `- </span> aaaaaaaaaaaaaaaa` at width 16 gives a lone `</span>` with the option off. Rule 4 only protects `<br>` tags, so the option just makes this existing hazard reachable for more inputs. The fuzz run below hit one more case of this kind, which I didn't reduce: a `| -` fragment wrapped to the start of a line, which the second pass pulls back up.
+>
+> **Suggestion:** list it as a known limitation. Fixing it means changing how the formatter wraps after any inline tag at the start of a block, which is out of scope.
+>
+> ## 4. The formatter's parser reads a link reference definition after a task box (low; stability only)
+>
+> `- [ ] [r]: /u Lorem<br>Lorem` with `textWrap: always`, `lineWidth: 20`:
+>
+> - **Pass 1:** the `[`…`]:` exception holds the break back. The line wraps to `- [ ] [r]: /u⏎      Lorem<br>Lorem`.
+> - **Pass 2:** the formatter's parser now reads `[r]: /u` as a definition. CommonMark and GFM don't, and pulldown-cmark renders it as text. So the rest of the paragraph gets the break.
+>
+> Without the task box, the formatter avoids that wrap. This is the same kind of problem as the existing `>`-after-task-box limitation (line 145) and could go next to it.
+>
+> ## Minor
+>
+> - **Line 89, "the node before it":** this should say "with the same parent", as the definition of "What follows" does. Take `a⏎_<br>b_ c`: in document order, the node before the tag is `a`, with a line ending between them, yet the implementation writes the break (`a⏎_<br>⏎b_ c`). Its line begins with `_`, so the break is correct; only the wording is off.
+> - **Wikilinks (line 133):** it could say plainly that the break *is* written there (`[[a<br>⏎b]]`). "Out of scope" can read as "left alone".
 >
 > ## What checks out
 >
-> - **Implementation section:** it matches the trial code function by function. The size estimate is accurate: 189 lines added and 169 net, against "about 190 (170 net)". The test files and their configurations match the spec's list.
-> - **No render changes found:** pulldown-cmark rendered every case the same with the option off and on, including my extra edge cases.
-> - **Inputs that behave correctly:** these gave stable, correctly indented output:
->   - setext h2 headings with a `-----` underline (the formatter reads setext before tables)
->   - definition-list definitions and task-list items
->   - CJK text
->   - `<span><br>b`
->   - text on the same line as a callout's `[!NOTE]`
->   - sentence mode with a sentence ending right before the tag
->   - `***` and `___` thematic breaks after the paragraph
+> - **Implementation section:** it matches the code function by function. The size estimate is accurate: 236 lines added and 213 net, against "about 240 (210 net)". The option count goes from 31 to 32, and the schema entry is there.
+> - **Test files:** the configurations and example placement match the test plan. Every example that names no mode is in all five `textWrap` files; 16a, 37 and 42a–c are in the setext file, and 29 is in the option-off file.
+> - **Fuzz run:** I generated about 120,000 random documents mixing block quotes, lists, task boxes, footnotes, definitions, table fragments, link text, `www.` and delimiter cells. Each ran in all five modes, at widths 80, 20 and 12, and with setext headings: about 970,000 format runs. I only counted cases where today's formatter keeps the page and is stable. Apart from findings 2–4 and the known unclosed-`<pre>` limitation, there were no option-only instabilities or page changes.
+>   - The page changes it did report were all of one kind. pulldown-cmark reads a `:` with no space after it as a definition marker (`b c⏎:-:x` becomes a `<dl>`); the formatter doesn't. That mismatch exists today, and the spec-file render check passes, but it would make a fuzzed render check noisy.
+> - **Hand checks:** these all came out stable and render the same:
+>   - a callout with the tag on the marker line
+>   - `[a⏎<br>b](/u)` in every mode
+>   - a delimiter row with pipes inside the paragraph (it gets pulled up, so no table)
+>   - definitions and footnotes followed by `- | -`
+>   - 3-space nested markers and `*` markers
+> - **Not verified:** the GitHub-specific claims (`www.` linking, heading anchors, a bare `:-:` read as a delimiter row). They match what I know of cmark-gfm, but I didn't run anything against GitHub.
 
 #### Implementation review rounds
 
-Not started yet.
+Each round was a new Claude Code session in a throwaway worktree of the branch,
+where the reviewer could build the formatter, write scratch tests and run
+`cargo`; rounds 2–4 also ran tens of thousands of random inputs. Nothing it
+wrote reached the repo; the accepted findings were applied as small, targeted
+edits.
+
+| Round | Findings | Main changes made                                                                                                                                                                                                                        |
+| ----- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1     | 5        | Headings get no break, since a line break can change a GitHub heading anchor (`a<br> b`), which removed the setext code; the rule is decided once per tag; the render check leaves wikilinks out; narrowing the table exception declined |
+| 2     | 4        | Task-list items get the table check before their nested list; the table check narrowed to a bullet list whose first item begins with `                                                                                                   | `; the render check uses GFM footnotes; rustfmt |
+| 3     | 4        | A paragraph holding a delimiter cell without `                                                                                                                                                                                           | `` (``:-:``) gets no break, since GitHub would make a table (found with comrak, a port of GitHub's parser); the list check skips line breaks after the marker; a redundant check removed; ``list.indentKind: pythonMarkdown` definitions listed as a known limitation |
+| 4     | 3        | Findings below: no correctness bugs; a wording contradiction in the spec and a stale comment fixed; an optional refactor declined                                                                                                        |
 
 #### Last implementation review
 
-Not started yet.
+Prompting Claude Opus 5.5 (`claude-opus-5-5`), extra high effort (`xhigh`), in
+Claude Code 2.1.280, running in a throwaway worktree of the branch where it
+could build the formatter, write scratch tests and run `cargo`, with
+`Review the implementation of the spec in src/generation/br-new-line-spec.md (the changes on this branch since upstream/main).`
+produced the following output on 801e69a; strikethrough indicates LLM output
+that we deemed incorrect or irrelevant. Finding 3 is struck through: it is an
+optional refactor, and the reviewer itself recommends keeping the local tag
+list, so we kept the code as it is. Findings 1 and 2 were applied.
+
+> I found no correctness bugs. The implementation matches the spec, all 199 tests pass, and `cargo fmt --check` and `cargo clippy --all-targets` are clean.
+>
+> **How I checked:** I read the full diff against `upstream/main`. Then I ran about 70 extra inputs through a temporary test, with the option on and off, and formatted each output a second time to check it doesn't change again. The inputs covered:
+>
+> - definition lists and footnotes where the tag comes first
+> - images, and shortcut and collapsed links
+> - tables that interrupt a paragraph
+> - bare delimiter cells, and list-item delimiter rows (indented, `*`, task boxes, escaped `|`)
+> - wrapping around emphasis, links and code spans, including nested containers
+> - CJK text, tags that span lines, CRLF line endings, two-space hard breaks
+> - ignore comments and every `textWrap` mode
+>
+> Two things held up particularly well:
+>
+> - **Tables:** the parser already keeps any delimiter-shaped line containing a `|` off a line start. `is_bare_delimiter_cell` and `may_begin_with_delimiter_row` cover the two cases it misses.
+> - **Block quotes:** the newline that sits inside the `if_true_or` still gets its `>` prefix, because the text after it is outside the condition.
+>
+> The temporary test file is deleted and the worktree is clean.
+>
+> **Minor findings:**
+>
+> 1. **The spec contradicts itself.** Rule 4's last sentence and example 55 say a tag that already begins a line keeps the word after it on the same line. The exceptions list says that for "The tag begins a line" the formatter "writes today's separator". In `always` and `maintainAndWrap`, today's separator lets wrapping split them (`<br>⏎https://…`). The code follows rule 4 and example 55, which is the right choice. The exceptions list (`br-new-line-spec.md:81-96`) should say the formatter "writes no line break after the tag" instead of "writes today's separator".
+>
+> 2. **One misleading comment.** `generate.rs:758` says "`last_node` is a break tag, which the caller checks", but `breaks_line_after_tag` has no `last_node`. Something like "the caller checks that the node before `next` is a break tag" would be clearer.
+>
+> 3. ~~**Optional tidy-up.** `is_break_tag` and `holds_preformatted_tag` each extract the tag name by hand. One small helper that reads the name once would shorten both. `crate::html::tags` already has `is_preformatted` and `is_raw_text`, but their lists don't match the spec's (no `xmp`, `code` or `tt`, and an extra `title`), so I'd keep the local list.~~
+>
+> **Unrelated to this branch:** `a<br>b⏎+⏎  | -` changes again on a second format with the option off too. The formatter moves `| -` up beside the `+`, and `+ | -` then reads as a list item. That's an upstream bug, not something this branch introduced.
+>
+> My probe inputs are still in `/tmp/brprobe/` because deleting files there needed approval; you can remove that folder.
 
 ### Daniil Chegodayev
 
@@ -329,8 +382,8 @@ Prompting an LLM with "Verify that you can build and run the project in the curr
 
 #### Specification review rounds
 
-| Round | Findings | Main changes made |
-| ----- | -------- | ----------------- |
+| Round | Findings | Main changes made                                                                                                                                                                               |
+| ----- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 2     | 2        | Verified idempotency across the 49 examples; confirmed table delimiter row checks with `*` and `-` list bullets; verified that plain space before `<br>` prevents unwanted line-start wrapping. |
 
 #### Last specification review

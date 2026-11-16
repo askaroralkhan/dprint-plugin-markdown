@@ -465,3 +465,22 @@ a | b<br>c
 
 [expect]
 a | b<br>c :-:
+
+!! spec example 59 !!
+> a<br>b
+>
+> -
+>   | -
+
+[expect]
+> a<br>b
+>
+> - | -
+
+!! spec example 60 !!
+a<br>b -:  
+c
+
+[expect]
+a<br>b -:\
+c

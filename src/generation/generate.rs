@@ -755,7 +755,7 @@ fn breaks_line_after_tag(next: &Node, context: &Context) -> bool {
   let Node::Text(text) = next else {
     return false;
   };
-  // `last_node` is a break tag, which the caller checks
+  // the caller checks that the node before `next` is a break tag
   context.configuration.line_break_after_br
     && text.text.starts_with(char::is_alphabetic)
     // GitHub links `www.` at the start of a line, but not after the tag's `>`
@@ -779,7 +779,8 @@ fn keeps_br_lines(node: &Node, next: Option<&Node>, context: &Context) -> bool {
       Node::Paragraph(paragraph) => {
         let text = paragraph.span.text(context.file_text);
         (text.starts_with('[') && text.contains("]:"))
-          || text.split_whitespace().any(is_bare_delimiter_cell)
+          // a hard break the formatter writes as `\\` sticks to the word before it
+          || text.split_whitespace().map(|word| word.trim_end_matches('\\')).any(is_bare_delimiter_cell)
           || holds_preformatted_tag(node.children())
           || next.is_some_and(|next| may_begin_with_delimiter_row(next, context))
       }
@@ -798,10 +799,11 @@ fn is_bare_delimiter_cell(word: &str) -> bool {
 
 /// Whether the node is a bullet list whose first item could begin with a
 /// table's delimiter row, so that a new line just above it could become the
-/// table's header: the item begins with `|`, which a delimiter row written as
-/// a list item (`- | -`) has right after its marker, or with a table or list,
-/// which the formatter may write that way. The formatter may rewrite the
-/// marker and join or wrap the item's lines, but it keeps the `|` where it is.
+/// table's header: the item begins with a paragraph starting with `|`, as a
+/// delimiter row written as a list item (`- | -`) does, or with a table or
+/// list, which the formatter may write that way. Reading the parsed item, not
+/// its source line, gives the same answer whatever the formatter does to the
+/// marker, a block quote's `>` or the item's line breaks.
 fn may_begin_with_delimiter_row(node: &Node, context: &Context) -> bool {
   let Node::List(list) = node else {
     return false;
@@ -813,10 +815,12 @@ fn may_begin_with_delimiter_row(node: &Node, context: &Context) -> bool {
     Some(Node::Item(item)) => item.children.first(),
     _ => None,
   };
-  matches!(first_child, Some(Node::Table(_) | Node::List(_)))
-    || context.file_text[node.span().start..]
-      .strip_prefix(['-', '*', '+'])
-      .is_some_and(|rest| rest.trim_start().starts_with('|'))
+  match first_child {
+    Some(Node::Table(_) | Node::List(_)) => true,
+    // the paragraph's text starts after the marker and any `>` prefixes
+    Some(Node::Paragraph(paragraph)) => paragraph.span.text(context.file_text).starts_with('|'),
+    _ => false,
+  }
 }
 
 /// Whether the nodes hold an inline tag of an element whose content shows its

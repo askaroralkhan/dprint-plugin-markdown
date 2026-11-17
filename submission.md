@@ -125,15 +125,39 @@ sections (f045976).
 
 #### Build and run test
 
-_To be added by Daniil: run "Verify that you can build and run the project in the current git repo." in your own clone and paste a summary of the output here._
+Ran the commands in a Docker container with the repository's pinned Rust 1.98.0:
+
+- `cargo build` succeeds.
+- `cargo test` passes: 160 unit tests, `br_render_check` (2),
+  `commonmark_spec_check` (10), `corpus_check` (1), `html_parser_specs` (8),
+  `nesting_test` (2), `newline_test` (9), `parser_specs` (39), `specs` (199),
+  and 2 documentation tests.
 
 #### Specification review rounds
 
-_To be added by Daniil: the review rounds you ran, if any, with the same columns as Askar's table; the team's shared rounds are in Askar's section._
+My individual reviews are listed below:
+
+| Round | Findings | Main changes made |
+| ----- | -------- | ----------------- |
+| Initial draft (`f045976`) | 3 | Reworded the introduction, Problem and Rule sections to clarify the source-level behavior and the purpose of the exceptions. |
+| Final LLM-assisted review (after round 12) | 0 | Reviewed the final spec's consistency, exceptions and examples; no changes were needed. See the review below. |
 
 #### Last specification review
 
-_To be added by Daniil: your last review, the prompt and the LLM, if you ran one._
+Prompting GPT-6 Luna with the prompt:
+
+> Review `src/generation/br-new-line-spec.md` for internal consistency,
+> completeness of the rule and exceptions, and gaps in the examples. Report
+> concrete correctness or clarity findings, and identify renderer-specific
+> claims you cannot verify from the specification alone.
+
+produced the following review on commit. No changes were required:
+
+> I found no concrete contradictions or correctness omissions in the rule,
+> exceptions, examples, or implementation and test-plan descriptions. The
+> examples cover the main branches of the rule, including wrapping, headings,
+> links, list and table hazards, and preformatted tags. The known limitations
+> are called out explicitly.
 
 ### Zhan Dzholdybayev
 
@@ -363,7 +387,16 @@ list, so we kept the code as it is. Findings 1 and 2 were applied.
 
 GitHub userid: Daniil-Chegodayev
 
-_To be added by Daniil: the same sections as above for the final submission._
+#### Contributions
+
+Reviewed the first draft and revised the introduction, Problem and Rule sections
+to clarify that the change concerns formatted source, explain the original
+wrapping problem, and make the rule and its exceptions easier to follow
+(f045976).
+
+At the end, prompted GPT-6 Luna to review the completed specification for
+consistency, exception coverage and gaps in the examples. The review found no
+concrete issues requiring changes.
 
 ### Zhan Dzholdybayev
 

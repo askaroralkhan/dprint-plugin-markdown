@@ -125,9 +125,10 @@ sections (f045976).
 
 #### Build and run test
 
-Ran the commands in a Docker container with the repository's pinned Rust 1.98.0:
+Prompting GPT-6 Luna with "Verify that you can build and run the project in the
+current git repo." produced the following output, summarized:
 
-- `cargo build` succeeds.
+- `cargo build` succeeds with the repository's pinned Rust 1.98.0.
 - `cargo test` passes: 160 unit tests, `br_render_check` (2),
   `commonmark_spec_check` (10), `corpus_check` (1), `html_parser_specs` (8),
   `nesting_test` (2), `newline_test` (9), `parser_specs` (39), `specs` (199),
@@ -139,7 +140,7 @@ My individual reviews are listed below:
 
 | Round | Findings | Main changes made |
 | ----- | -------- | ----------------- |
-| Initial draft (`f045976`) | 3 | Reworded the introduction, Problem and Rule sections to clarify the source-level behavior and the purpose of the exceptions. |
+| Manual draft review (`f045976`) | 3 | Reworded the introduction, Problem and Rule sections to clarify the source-level behavior and the purpose of the exceptions. |
 | Final LLM-assisted review (after round 12) | 0 | Reviewed the final spec's consistency, exceptions and examples; no changes were needed. See the review below. |
 
 #### Last specification review
@@ -151,7 +152,7 @@ Prompting GPT-6 Luna with the prompt:
 > concrete correctness or clarity findings, and identify renderer-specific
 > claims you cannot verify from the specification alone.
 
-produced the following review on commit. No changes were required:
+produced the following review on commit 7986cd0. No changes were required:
 
 > I found no concrete contradictions or correctness omissions in the rule,
 > exceptions, examples, or implementation and test-plan descriptions. The

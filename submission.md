@@ -404,7 +404,8 @@ GitHub userid: zhanapan
 
 #### Contributions
 
-Reviewed the finalized specification across rounds 7–8, verified the expanded 49-case examples table against CommonMark rendering behavior, and verified the trial implementation and `pulldown-cmark` test suite locally.
+Checked the finalized 49-case examples table against CommonMark rendering behavior, and verified the trial implementation and full test suite locally.
+
 
 #### Build and run test
 
